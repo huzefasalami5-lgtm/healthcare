@@ -46,6 +46,12 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
   const [patientName, setPatientName] = useState('');
   const [patientPhone, setPatientPhone] = useState('');
   const [patientAddress, setPatientAddress] = useState('');
+  const [patientGender, setPatientGender] = useState('Female');
+  const [patientDob, setPatientDob] = useState('1984-05-12');
+  const [patientBloodGroup, setPatientBloodGroup] = useState('B+');
+  const [patientAbhaId, setPatientAbhaId] = useState('');
+  const [patientEmergencyName, setPatientEmergencyName] = useState('');
+  const [patientEmergencyPhone, setPatientEmergencyPhone] = useState('');
   const [transportBarrier, setTransportBarrier] = useState(true);
   const [complaint, setComplaint] = useState('');
   const [description, setDescription] = useState('');
@@ -97,13 +103,19 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
     setIsSubmitting(true);
     setModalFeedback(null);
     try {
-      // 1. Assisted register patient
+      // 1. Assisted register patient with comprehensive demographics
       const reg = await assistedPatientRegisterApi({
         full_name: patientName,
         phone: patientPhone || '+91-98450-77661',
         address: patientAddress || 'Rural Sector, Kudligere',
         transport_access_barrier: transportBarrier,
-        district: 'Shivamogga'
+        district: 'Shivamogga',
+        gender: patientGender,
+        date_of_birth: patientDob,
+        blood_group: patientBloodGroup || undefined,
+        abha_id: patientAbhaId || undefined,
+        emergency_contact_name: patientEmergencyName || undefined,
+        emergency_contact_phone: patientEmergencyPhone || undefined,
       });
 
       // 2. Create case with worker assignment
@@ -123,7 +135,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
           onset_duration: duration,
           reported_severity: severity
         });
-        setModalFeedback('Draft intake saved successfully for offline/field resume.');
+        setModalFeedback(`Draft saved. Formatted Patient ID: ${reg.patient_identifier || reg.patient_id.slice(0, 8)}`);
       } else {
         await submitIntakeApi(newCase.id, {
           main_complaint: complaint,
@@ -131,7 +143,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
           onset_duration: duration,
           reported_severity: severity
         });
-        setModalFeedback('Assisted intake submitted directly to Doctor Review Queue.');
+        setModalFeedback(`Assisted intake submitted! Patient ID: ${reg.patient_identifier || reg.patient_id.slice(0, 8)} (Sent to Doctor Queue)`);
       }
 
       setTimeout(() => {
@@ -263,18 +275,40 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
               assignedPatients.map((p) => (
                 <div
                   key={p.patient_id}
-                  className="bg-slate-900 border border-slate-800 rounded-xl p-4 hover:border-amber-500/50 transition-all text-xs space-y-2"
+                  className="bg-slate-900 border border-slate-800 rounded-xl p-4 hover:border-amber-500/50 transition-all text-xs space-y-2.5"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-white text-sm">{p.full_name}</span>
+                    <div>
+                      <span className="font-bold text-white text-sm">{p.full_name}</span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="font-mono text-[11px] text-teal-400 font-bold bg-teal-950/60 px-2 py-0.5 rounded border border-teal-800/40">
+                          {p.patient_identifier || `CR-PAT-2026-${p.patient_id.slice(0, 4).toUpperCase()}`}
+                        </span>
+                        {p.blood_group && (
+                          <span className="bg-rose-950/80 text-rose-300 font-bold text-[10px] px-1.5 py-0.5 rounded border border-rose-800/40">
+                            🩸 {p.blood_group}
+                          </span>
+                        )}
+                        {p.abha_id && (
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            ABHA: {p.abha_id}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                     <span className="font-mono text-slate-400">{p.phone}</span>
                   </div>
 
-                  <div className="text-slate-400">
-                    <span>Address: {p.address} ({p.district})</span>
+                  <div className="text-slate-400 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
+                    <span>📍 {p.address} ({p.district})</span>
+                    {p.emergency_contact_name && (
+                      <span className="text-slate-400">
+                        🚨 Emergency: <strong className="text-slate-300">{p.emergency_contact_name}</strong> ({p.emergency_contact_phone})
+                      </span>
+                    )}
                   </div>
 
-                  <div className="flex items-center justify-between pt-1 border-t border-slate-800/80">
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-800/80">
                     <div className="flex items-center gap-2">
                       {p.transport_barrier && (
                         <span className="bg-amber-950 text-amber-300 text-[10px] px-2 py-0.5 rounded border border-amber-800/50">
@@ -293,9 +327,11 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
                         setPatientName(p.full_name);
                         setPatientPhone(p.phone);
                         setPatientAddress(p.address || '');
+                        if (p.blood_group) setPatientBloodGroup(p.blood_group);
+                        if (p.abha_id) setPatientAbhaId(p.abha_id);
                         setIsAssistedModalOpen(true);
                       }}
-                      className="text-amber-400 hover:text-amber-300 text-[11px] font-semibold"
+                      className="text-amber-400 hover:text-amber-300 text-[11px] font-semibold flex items-center gap-1"
                     >
                       Conduct Assisted Intake &rarr;
                     </button>

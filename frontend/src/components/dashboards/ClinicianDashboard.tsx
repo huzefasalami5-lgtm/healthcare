@@ -16,9 +16,14 @@ import {
   Wind, 
   X,
   Send,
-  AlertTriangle
+  AlertTriangle,
+  Pill,
+  HeartPulse,
+  Plus,
+  Trash2,
+  FileText
 } from 'lucide-react';
-import { CaseSummary, CaseDetail, FacilityMatch, UserProfile } from '../../types/curareach';
+import { CaseSummary, CaseDetail, FacilityMatch, UserProfile, MedicalHistoryOverview } from '../../types/curareach';
 import { 
   fetchCaseDetail, 
   submitClinicianReviewApi, 
@@ -26,7 +31,9 @@ import {
   authorizeReferralApi, 
   approveAlternativeReferralApi,
   closeCaseApi,
-  getImageUrl
+  getImageUrl,
+  fetchMedicalHistory,
+  createPrescriptionApi
 } from '../../services/curareachApi';
 
 interface ClinicianDashboardProps {
@@ -44,6 +51,24 @@ export const ClinicianDashboard: React.FC<ClinicianDashboardProps> = ({
   const [caseDetail, setCaseDetail] = useState<CaseDetail | null>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [urgencyFilter, setUrgencyFilter] = useState<string>('ALL');
+
+  // Medical History & Prescription State
+  const [patientMedicalHistory, setPatientMedicalHistory] = useState<MedicalHistoryOverview | null>(null);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
+  const [rxDiagnosis, setRxDiagnosis] = useState('');
+  const [rxInstructions, setRxInstructions] = useState('');
+  const [rxValidUntil, setRxValidUntil] = useState('2026-10-30');
+  const [rxItems, setRxItems] = useState<Array<{
+    medication_name: string;
+    dosage: string;
+    frequency: string;
+    duration_days: number;
+    instructions: string;
+  }>>([
+    { medication_name: '', dosage: '500 mg', frequency: 'Twice daily after food', duration_days: 7, instructions: 'Drink plenty of water' }
+  ]);
+  const [isSubmittingRx, setIsSubmittingRx] = useState(false);
 
   // Review Drawer State
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
@@ -72,6 +97,11 @@ export const ClinicianDashboard: React.FC<ClinicianDashboardProps> = ({
       setCaseDetail(detail);
       setConfirmedUrgency(detail.confirmed_urgency || detail.provisional_urgency);
       setClinicalNotes(detail.reviews[0]?.clinical_notes || '');
+
+      // Load patient medical history
+      fetchMedicalHistory(detail.patient_id)
+        .then(hist => setPatientMedicalHistory(hist))
+        .catch(err => console.warn('Could not load patient medical history:', err));
 
       // Pre-load facility matches if ready
       if (['AWAITING_CLINICIAN_REVIEW', 'CLINICIAN_REVIEWED', 'ALTERNATIVE_REVIEW_REQUIRED'].includes(detail.current_state)) {
@@ -294,13 +324,39 @@ export const ClinicianDashboard: React.FC<ClinicianDashboardProps> = ({
             <div className="space-y-5">
               {/* Patient & Complaint Header */}
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-                <div className="flex items-start justify-between border-b border-slate-800 pb-3">
+                <div className="flex flex-wrap items-start justify-between border-b border-slate-800 pb-3 gap-2">
                   <div>
-                    <span className="text-xs font-mono text-cyan-400">{caseDetail.case_number}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono text-cyan-400">{caseDetail.case_number}</span>
+                      {patientMedicalHistory?.patient_identifier && (
+                        <span className="text-[11px] font-mono font-bold text-teal-400 bg-teal-950 px-2 py-0.5 rounded border border-teal-800/40">
+                          {patientMedicalHistory.patient_identifier}
+                        </span>
+                      )}
+                      {patientMedicalHistory?.blood_group && (
+                        <span className="text-[11px] text-slate-300 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">
+                          Blood: {patientMedicalHistory.blood_group}
+                        </span>
+                      )}
+                    </div>
                     <h2 className="text-lg font-bold text-white mt-0.5">{caseDetail.patient_name}</h2>
                     <p className="text-xs text-slate-400">{caseDetail.primary_complaint}</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => setIsHistoryModalOpen(true)}
+                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-teal-300 border border-teal-800/50 rounded-xl text-xs font-semibold flex items-center gap-1.5"
+                    >
+                      <HeartPulse className="w-3.5 h-3.5 text-teal-400" />
+                      <span>Medical History</span>
+                    </button>
+                    <button
+                      onClick={() => setIsPrescriptionModalOpen(true)}
+                      className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow"
+                    >
+                      <Pill className="w-3.5 h-3.5" />
+                      <span>Issue Rx</span>
+                    </button>
                     <button
                       onClick={() => setIsReviewModalOpen(true)}
                       className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-semibold shadow"
@@ -317,6 +373,31 @@ export const ClinicianDashboard: React.FC<ClinicianDashboardProps> = ({
                     )}
                   </div>
                 </div>
+
+                {/* Severe Allergy Safety Alert Gate */}
+                {patientMedicalHistory?.allergies?.some(a => a.severity === 'SEVERE' || a.severity === 'LIFE_THREATENING') && (
+                  <div className="bg-red-950/70 border-2 border-red-500/80 rounded-xl p-3.5 flex items-start gap-3 text-red-200">
+                    <ShieldAlert className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                    <div className="text-xs space-y-1">
+                      <div className="font-bold text-red-300 uppercase tracking-wider flex items-center gap-2">
+                        <span>Allergy Safety Gate Active</span>
+                        <span className="bg-red-600 text-white text-[10px] px-1.5 py-0.2 rounded font-mono">CRITICAL</span>
+                      </div>
+                      <p className="text-red-100">
+                        Patient has documented severe allergy to:{' '}
+                        <strong>
+                          {patientMedicalHistory.allergies
+                            .filter(a => a.severity === 'SEVERE' || a.severity === 'LIFE_THREATENING')
+                            .map(a => `${a.allergen} (${a.reaction || 'Severe Reaction'})`)
+                            .join(', ')}
+                        </strong>
+                      </p>
+                      <p className="text-[11px] text-red-300 italic">
+                        Safety Rule: Do NOT prescribe cross-reactive antibiotics or compounds. Verification gate enforced.
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Objective Vitals Banner */}
                 {caseDetail.symptoms?.vitals && (
@@ -705,6 +786,325 @@ export const ClinicianDashboard: React.FC<ClinicianDashboardProps> = ({
                   className="px-4 py-1.5 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-lg"
                 >
                   Confirm Closure
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Medical History Modal */}
+      {isHistoryModalOpen && caseDetail && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 text-slate-100 space-y-4 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <HeartPulse className="w-5 h-5 text-teal-400" />
+                <h3 className="text-base font-bold text-white">
+                  Patient Medical History & Safety Profile — {caseDetail.patient_name}
+                </h3>
+              </div>
+              <button onClick={() => setIsHistoryModalOpen(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {!patientMedicalHistory ? (
+              <p className="text-xs text-slate-400 py-6 text-center">Loading medical profile...</p>
+            ) : (
+              <div className="space-y-4 text-xs">
+                {/* ID & Blood Group */}
+                <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 flex flex-wrap gap-4">
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase">Patient ID</span>
+                    <span className="font-mono font-bold text-teal-400">{patientMedicalHistory.patient_identifier}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase">Blood Group</span>
+                    <span className="font-bold text-white">{patientMedicalHistory.blood_group || 'O+'}</span>
+                  </div>
+                </div>
+
+                {/* Allergies */}
+                <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2">
+                  <h4 className="font-bold uppercase tracking-wider text-red-300 text-xs flex items-center gap-1.5">
+                    <ShieldAlert className="w-4 h-4 text-red-400" /> Allergies & Adverse Drug Reactions
+                  </h4>
+                  {patientMedicalHistory.allergies.length === 0 ? (
+                    <p className="text-slate-500">No known allergies on record.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {patientMedicalHistory.allergies.map(a => (
+                        <div key={a.id} className="p-2 rounded bg-slate-900 border border-slate-800 flex justify-between items-center">
+                          <div>
+                            <span className="font-bold text-slate-200">{a.allergen}</span>
+                            {a.reaction && <span className="text-slate-400 ml-2">Reaction: {a.reaction}</span>}
+                            {a.notes && <div className="text-[11px] text-slate-500">{a.notes}</div>}
+                          </div>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                            a.severity === 'SEVERE' || a.severity === 'LIFE_THREATENING'
+                              ? 'bg-red-500/20 text-red-400 border border-red-500/50'
+                              : 'bg-amber-500/20 text-amber-300'
+                          }`}>
+                            {a.severity}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Conditions */}
+                <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2">
+                  <h4 className="font-bold uppercase tracking-wider text-teal-300 text-xs">Diagnosed Chronic / Active Conditions</h4>
+                  {patientMedicalHistory.conditions.length === 0 ? (
+                    <p className="text-slate-500">No conditions recorded.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {patientMedicalHistory.conditions.map(c => (
+                        <div key={c.id} className="p-2 rounded bg-slate-900 border border-slate-800 flex justify-between items-center">
+                          <div>
+                            <span className="font-semibold text-slate-200">{c.condition_name}</span>
+                            {c.notes && <p className="text-[11px] text-slate-400 mt-0.5">{c.notes}</p>}
+                          </div>
+                          <span className="text-[10px] font-mono text-teal-400 bg-teal-950 px-2 py-0.5 rounded">
+                            {c.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Regular Medications */}
+                <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2">
+                  <h4 className="font-bold uppercase tracking-wider text-slate-300 text-xs flex items-center gap-1.5">
+                    <Pill className="w-3.5 h-3.5 text-teal-400" /> Current Medications
+                  </h4>
+                  {patientMedicalHistory.medications.length === 0 ? (
+                    <p className="text-slate-500">None documented.</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {patientMedicalHistory.medications.map(m => (
+                        <div key={m.id} className="p-2 rounded bg-slate-900 border border-slate-800 flex justify-between">
+                          <span className="text-slate-200 font-semibold">{m.medication_name} ({m.dosage})</span>
+                          <span className="text-slate-400">{m.frequency}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsHistoryModalOpen(false)}
+                className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold hover:bg-slate-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Issue Digital Prescription Modal */}
+      {isPrescriptionModalOpen && caseDetail && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 text-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Pill className="w-5 h-5 text-teal-400" />
+                <h3 className="text-base font-bold text-white">
+                  Issue Digital Prescription — {caseDetail.patient_name}
+                </h3>
+              </div>
+              <button onClick={() => setIsPrescriptionModalOpen(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Contraindication reminder */}
+            {patientMedicalHistory?.allergies?.some(a => a.severity === 'SEVERE' || a.severity === 'LIFE_THREATENING') && (
+              <div className="p-2.5 bg-red-950/60 border border-red-500/50 rounded-xl text-[11px] text-red-200 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>
+                  Safety Check: Patient has <strong>{patientMedicalHistory.allergies.filter(a => a.severity === 'SEVERE').map(a => a.allergen).join(', ')}</strong> allergy. Avoid all contraindicated formulations.
+                </span>
+              </div>
+            )}
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const validItems = rxItems.filter(i => i.medication_name.trim());
+                if (validItems.length === 0) {
+                  alert('Please enter at least one medication item.');
+                  return;
+                }
+                setIsSubmittingRx(true);
+                try {
+                  const res = await createPrescriptionApi({
+                    patient_id: caseDetail.patient_id,
+                    case_id: caseDetail.id,
+                    diagnosis: rxDiagnosis || caseDetail.primary_complaint,
+                    general_instructions: rxInstructions,
+                    valid_until: rxValidUntil,
+                    items: validItems
+                  });
+                  alert(`Prescription ${res.prescription_code} issued successfully!`);
+                  setIsPrescriptionModalOpen(false);
+                  setRxDiagnosis('');
+                  setRxInstructions('');
+                } catch (err: any) {
+                  alert(err.message || 'Failed to issue prescription.');
+                } finally {
+                  setIsSubmittingRx(false);
+                }
+              }}
+              className="space-y-4 text-xs"
+            >
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Clinical Diagnosis *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Type 2 Diabetes Mellitus with Peripheral Dysesthesia"
+                  value={rxDiagnosis}
+                  onChange={(e) => setRxDiagnosis(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                />
+              </div>
+
+              {/* Medication Items */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-slate-300 font-bold uppercase tracking-wider text-[11px]">Medications ({rxItems.length})</label>
+                  <button
+                    type="button"
+                    onClick={() => setRxItems([...rxItems, { medication_name: '', dosage: '500 mg', frequency: 'Twice daily', duration_days: 7, instructions: '' }])}
+                    className="flex items-center gap-1 text-[11px] text-teal-400 hover:text-teal-300 font-semibold"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Medicine</span>
+                  </button>
+                </div>
+
+                {rxItems.map((item, idx) => (
+                  <div key={idx} className="bg-slate-950/70 p-3 rounded-xl border border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <input
+                        type="text"
+                        required
+                        placeholder="Medication name (e.g. Metformin, Cetirizine)"
+                        value={item.medication_name}
+                        onChange={(e) => {
+                          const updated = [...rxItems];
+                          updated[idx].medication_name = e.target.value;
+                          setRxItems(updated);
+                        }}
+                        className="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
+                      />
+                      {rxItems.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setRxItems(rxItems.filter((_, i) => i !== idx))}
+                          className="text-slate-500 hover:text-red-400 p-1"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <span className="text-[10px] text-slate-400 block mb-0.5">Dosage</span>
+                        <input
+                          type="text"
+                          placeholder="e.g. 500 mg"
+                          value={item.dosage}
+                          onChange={(e) => {
+                            const updated = [...rxItems];
+                            updated[idx].dosage = e.target.value;
+                            setRxItems(updated);
+                          }}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-white"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 block mb-0.5">Frequency</span>
+                        <input
+                          type="text"
+                          placeholder="e.g. Twice daily"
+                          value={item.frequency}
+                          onChange={(e) => {
+                            const updated = [...rxItems];
+                            updated[idx].frequency = e.target.value;
+                            setRxItems(updated);
+                          }}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-white"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 block mb-0.5">Duration (Days)</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={90}
+                          value={item.duration_days}
+                          onChange={(e) => {
+                            const updated = [...rxItems];
+                            updated[idx].duration_days = Number(e.target.value);
+                            setRxItems(updated);
+                          }}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <input
+                      type="text"
+                      placeholder="Special instructions (e.g. Take after food with water)"
+                      value={item.instructions}
+                      onChange={(e) => {
+                        const updated = [...rxItems];
+                        updated[idx].instructions = e.target.value;
+                        setRxItems(updated);
+                      }}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-white text-[11px]"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">General Dietary / Lifestyle Directives</label>
+                <textarea
+                  rows={2}
+                  placeholder="Low sodium diet, hydration, 30-min walking..."
+                  value={rxInstructions}
+                  onChange={(e) => setRxInstructions(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsPrescriptionModalOpen(false)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingRx}
+                  className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl shadow flex items-center gap-1.5"
+                >
+                  {isSubmittingRx ? <Clock className="w-4 h-4 animate-spin" /> : <Pill className="w-4 h-4" />}
+                  <span>Sign & Issue Digital Rx</span>
                 </button>
               </div>
             </form>

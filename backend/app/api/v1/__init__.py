@@ -14,6 +14,10 @@ from app.api.v1.community import router as community_router
 from app.api.v1.hospitals import router as hospitals_router
 from app.api.v1.admin import router as admin_router
 from app.api.v1.demo import router as demo_router
+from app.api.v1.medical_history import router as medical_history_router
+from app.api.v1.medical_records import router as medical_records_router
+from app.api.v1.prescriptions import router as prescriptions_router
+from app.api.v1.transactions import router as transactions_router
 
 api_v1_router = APIRouter(prefix="/v1")
 
@@ -30,3 +34,7 @@ api_v1_router.include_router(community_router)
 api_v1_router.include_router(hospitals_router)
 api_v1_router.include_router(admin_router)
 api_v1_router.include_router(demo_router)
+api_v1_router.include_router(medical_history_router)
+api_v1_router.include_router(medical_records_router)
+api_v1_router.include_router(prescriptions_router)
+api_v1_router.include_router(transactions_router)

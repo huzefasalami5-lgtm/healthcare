@@ -37,6 +37,7 @@ class Settings(BaseModel):
     )
     MAX_IMAGE_SIZE_BYTES: int = 10 * 1024 * 1024  # 10MB
     ALLOWED_IMAGE_MIMES: list[str] = ["image/jpeg", "image/png", "image/webp"]
+    ALLOWED_DOC_MIMES: list[str] = ["image/jpeg", "image/png", "image/webp", "application/pdf", "text/plain"]
     
     # AI Engine
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")

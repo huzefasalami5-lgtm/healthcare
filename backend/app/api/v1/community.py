@@ -22,6 +22,11 @@ class AssistedPatientRegisterRequest(BaseModel):
     transport_access_barrier: bool = False
     financial_barrier: bool = False
     primary_language: str = "English"
+    blood_group: Optional[str] = None
+    emergency_contact_name: Optional[str] = None
+    emergency_contact_phone: Optional[str] = None
+    emergency_contact_relation: Optional[str] = None
+    abha_id: Optional[str] = None
 
 class BarrierReportRequest(BaseModel):
     case_id: str
@@ -46,8 +51,13 @@ def get_assigned_patients(
         patient_cases = [c for c in cases if c.patient_id == p.id]
         result.append({
             "patient_id": p.id,
+            "patient_identifier": p.patient_identifier or f"CR-PAT-2026-{p.id[:4].upper()}",
             "full_name": p.full_name,
             "phone": p.phone,
+            "blood_group": p.blood_group,
+            "abha_id": p.abha_id,
+            "emergency_contact_name": p.emergency_contact_name,
+            "emergency_contact_phone": p.emergency_contact_phone,
             "address": prof.address if prof else None,
             "district": prof.district if prof else "Shivamogga",
             "transport_barrier": prof.transport_access_barrier if prof else False,
@@ -72,15 +82,26 @@ def assisted_patient_registration(
         return {
             "message": "Patient already registered. Ready for assisted intake.",
             "patient_id": existing.id,
+            "patient_identifier": existing.patient_identifier,
             "full_name": existing.full_name
         }
+
+    # Generate unique formatted patient identifier
+    count = db.query(User).filter(User.role == Role.PATIENT).count()
+    patient_identifier = f"CR-PAT-2026-{(count + 1):04d}"
 
     patient_user = User(
         email=clean_email,
         hashed_password=get_password_hash("patient123"),
         full_name=req.full_name,
         phone=req.phone,
-        role=Role.PATIENT
+        role=Role.PATIENT,
+        patient_identifier=patient_identifier,
+        blood_group=req.blood_group,
+        emergency_contact_name=req.emergency_contact_name,
+        emergency_contact_phone=req.emergency_contact_phone,
+        emergency_contact_relation=req.emergency_contact_relation,
+        abha_id=req.abha_id
     )
     db.add(patient_user)
     db.commit()
@@ -102,6 +123,7 @@ def assisted_patient_registration(
     return {
         "message": "Patient successfully registered under assisted care pathway.",
         "patient_id": patient_user.id,
+        "patient_identifier": patient_user.patient_identifier,
         "full_name": patient_user.full_name,
         "email": patient_user.email
     }

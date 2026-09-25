@@ -4,13 +4,13 @@ Tests RBAC, Consent, Emergency Warning, Clinician Approval Gates, Isolation, Sta
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
-from app.core.database import Base, engine, SessionLocal
+from app.core.database import Base, engine, SessionLocal, ensure_database_schema
 from app.services.seed_service import seed_database
 from app.core.security import create_access_token
 
 @pytest.fixture(scope="module")
 def client():
-    Base.metadata.create_all(bind=engine)
+    ensure_database_schema()
     db = SessionLocal()
     seed_database(db)
     db.close()
@@ -188,3 +188,124 @@ def test_image_signature_validation(client):
     assert image_service.validate_file_signature(b"\xff\xd8\xff\xe0\x00\x10JFIF", "image/jpeg") is True
     # Fake JPEG with text content
     assert image_service.validate_file_signature(b"<html>Malicious script</html>", "image/jpeg") is False
+
+# 9. PATIENT REGISTRATION & FORMATTED PATIENT ID (CR-PAT-2026-XXXX)
+def test_patient_registration_generates_formatted_id(client):
+    unique_email = f"test_pat_{id(client)}@curareach.org"
+    res = client.post("/api/v1/auth/register", json={
+        "email": unique_email,
+        "password": "Password@123",
+        "full_name": "Deepa Sundaram",
+        "phone": "+91-98450-77665",
+        "role": "PATIENT",
+        "date_of_birth": "1990-05-14",
+        "gender": "Female",
+        "blood_group": "B+",
+        "district": "Shivamogga",
+        "abha_id": "91-2026-5544-3322"
+    })
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert "access_token" in data
+    assert data["user"]["role"] == "PATIENT"
+    assert data["user"]["patient_identifier"].startswith("CR-PAT-2026-")
+
+# 10. STRUCTURED MEDICAL HISTORY & ALLERGY SEVERITY
+def test_medical_history_conditions_and_allergies(client):
+    doc_header = get_auth_header("doctor@curareach.org", "CLINICIAN")
+    
+    # Fetch medical history for Ramesh Patel (pre-seeded)
+    res = client.get("/api/v1/medical-history/patient/CR-PAT-2026-0101", headers=doc_header)
+    assert res.status_code == 200, res.text
+    history = res.json()
+    assert history["patient_identifier"] == "CR-PAT-2026-0101"
+    assert len(history["conditions"]) >= 1
+    assert any(c["condition_name"] == "Type 2 Diabetes Mellitus" for c in history["conditions"])
+    
+    # Verify severe allergy warning
+    assert any(a["allergen"].startswith("Penicillin") and a["severity"] == "SEVERE" for a in history["allergies"])
+    
+    # Add new condition via API
+    add_res = client.post(f"/api/v1/medical-history/patient/{history['patient_id']}/conditions", json={
+        "condition_name": "Hyperlipidemia",
+        "status": "ACTIVE",
+        "severity": "MILD",
+        "notes": "Mild elevated triglycerides"
+    }, headers=doc_header)
+    assert add_res.status_code == 200
+
+# 11. MEDICAL RECORDS & DIGITAL PRESCRIPTIONS
+def test_medical_records_and_prescriptions(client):
+    doc_header = get_auth_header("doctor@curareach.org", "CLINICIAN")
+    pat_header = get_auth_header("patient@curareach.org", "PATIENT")
+    
+    # Check pre-seeded medical records
+    rec_res = client.get("/api/v1/medical-records/patient/CR-PAT-2026-0101", headers=doc_header)
+    assert rec_res.status_code == 200, rec_res.text
+    records = rec_res.json()
+    assert len(records) >= 1
+    assert any(r["record_type"] == "LAB_REPORT" for r in records)
+    
+    # Create a new digital prescription
+    history = client.get("/api/v1/medical-history/patient/CR-PAT-2026-0101", headers=doc_header).json()
+    rx_res = client.post("/api/v1/prescriptions", json={
+        "patient_id": history["patient_id"],
+        "diagnosis": "Seasonal Upper Respiratory Tract Infection",
+        "general_instructions": "Hydration and steam inhalation twice daily",
+        "items": [
+            {
+                "medication_name": "Cetirizine 10mg",
+                "dosage": "1 tab",
+                "frequency": "Once daily at bedtime",
+                "duration_days": 5,
+                "instructions": "May cause mild drowsiness"
+            }
+        ]
+    }, headers=doc_header)
+    assert rx_res.status_code == 200, rx_res.text
+    assert rx_res.json()["prescription_code"].startswith("RX-2026-")
+
+# 12. TREATMENT INVOICING, SIMULATED PAYMENTS & FINANCIAL SEPARATION
+def test_treatment_transaction_and_financial_separation(client):
+    hosp_header = get_auth_header("hospital@curareach.org", "HOSPITAL_STAFF")
+    history = client.get("/api/v1/medical-history/patient/CR-PAT-2026-0101", headers=hosp_header).json()
+    
+    # Create a medical treatment invoice
+    inv_res = client.post("/api/v1/transactions/invoice", json={
+        "patient_id": history["patient_id"],
+        "transaction_type": "CONSULTATION",
+        "item_description": "Follow-up Specialist Review Fee",
+        "amount_inr": 250.0,
+        "discount_inr": 0.0,
+        "payment_method": "UPI",
+        "payment_status": "UNPAID"
+    }, headers=hosp_header)
+    assert inv_res.status_code == 200, inv_res.text
+    inv_data = inv_res.json()
+    txn_id = inv_data["transaction_id"]
+    assert inv_data["invoice_number"].startswith("INV-MED-2026-")
+    
+    # Record simulated payment via UPI
+    pay_res = client.post(f"/api/v1/transactions/{txn_id}/pay", json={
+        "payment_method": "UPI",
+        "transaction_reference": "TXN-UPI-TEST-12345"
+    }, headers=hosp_header)
+    assert pay_res.status_code == 200, pay_res.text
+    pay_data = pay_res.json()
+    assert pay_data["payment_status"] == "PAID"
+    assert pay_data["is_simulated"] is True
+    
+    # Strict financial separation:
+    # Verify that DemoInvoice (B2B SaaS subscription invoices) contains only hospital subscription invoices
+    from app.models.billing import DemoInvoice
+    from app.models.treatment_billing import PatientTreatmentTransaction
+    db = SessionLocal()
+    b2b_invoices = db.query(DemoInvoice).all()
+    treatment_invoices = db.query(PatientTreatmentTransaction).all()
+    db.close()
+    
+    # B2B invoices have hospital_id and subscription_id, NO patient_id
+    assert all(hasattr(b, "subscription_id") and not hasattr(b, "patient_id") for b in b2b_invoices)
+    # Treatment invoices have patient_id and item_description
+    assert all(hasattr(t, "patient_id") and hasattr(t, "item_description") for t in treatment_invoices)
+

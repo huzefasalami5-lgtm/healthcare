@@ -11,14 +11,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.database import engine, Base, SessionLocal
+from app.core.database import engine, Base, SessionLocal, ensure_database_schema
 from app.services.seed_service import seed_database
 from app.api.v1 import api_v1_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Ensure database schema is initialized and seeded
-    Base.metadata.create_all(bind=engine)
+    ensure_database_schema()
     db: Session = SessionLocal()
     try:
         seed_database(db)

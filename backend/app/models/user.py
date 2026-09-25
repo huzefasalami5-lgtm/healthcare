@@ -29,18 +29,32 @@ class PatientProfile(Base):
     __tablename__ = "patient_profiles"
     
     id = Column(String(36), primary_key=True, default=generate_uuid)
+    patient_identifier = Column(String(50), unique=True, index=True, nullable=True) # e.g. CR-PAT-2026-0101
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
     date_of_birth = Column(String(20), nullable=True)
     gender = Column(String(20), nullable=True)
+    blood_group = Column(String(10), default="O+")
     address = Column(String(255), nullable=True)
     district = Column(String(100), nullable=True)
     state = Column(String(100), default="Karnataka")
+    pincode = Column(String(20), default="577201")
+    emergency_contact_name = Column(String(100), nullable=True)
     emergency_contact_phone = Column(String(50), nullable=True)
+    emergency_contact_relation = Column(String(50), default="Family Member")
     primary_language = Column(String(50), default="English")
     transport_access_barrier = Column(Boolean, default=False)
     financial_barrier = Column(Boolean, default=False)
+    abha_id = Column(String(50), nullable=True) # Fictional Ayushman Bharat Health Account ID
     
     user = relationship("User", back_populates="patient_profile")
+    conditions = relationship("PatientCondition", back_populates="patient", cascade="all, delete-orphan")
+    allergies = relationship("PatientAllergy", back_populates="patient", cascade="all, delete-orphan")
+    surgeries = relationship("PatientSurgery", back_populates="patient", cascade="all, delete-orphan")
+    medications = relationship("PatientMedication", back_populates="patient", cascade="all, delete-orphan")
+    family_history = relationship("FamilyMedicalHistory", back_populates="patient", cascade="all, delete-orphan")
+    medical_records = relationship("MedicalRecord", back_populates="patient", cascade="all, delete-orphan")
+    prescriptions = relationship("Prescription", back_populates="patient", cascade="all, delete-orphan")
+    transactions = relationship("PatientTreatmentTransaction", back_populates="patient", cascade="all, delete-orphan")
 
 class CommunityWorkerProfile(Base):
     __tablename__ = "community_worker_profiles"

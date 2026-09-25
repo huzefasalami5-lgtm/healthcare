@@ -293,6 +293,11 @@ export async function assistedPatientRegisterApi(patient: {
   financial_barrier?: boolean;
   date_of_birth?: string;
   gender?: string;
+  blood_group?: string;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  emergency_contact_relation?: string;
+  abha_id?: string;
 }): Promise<any> {
   return request('/community/register-patient', {
     method: 'POST',
@@ -370,3 +375,262 @@ export async function resetDemoDatabaseApi(): Promise<any> {
 export async function fetchDemoScenarios(): Promise<DemoScenario[]> {
   return request<DemoScenario[]>('/demo/scenarios');
 }
+
+// 13. PATIENT REGISTRATION & PROFILE (Self-service and Assisted)
+export async function registerPatientApi(payload: {
+  email: string;
+  password: string;
+  full_name: string;
+  phone?: string;
+  date_of_birth?: string;
+  gender?: string;
+  blood_group?: string;
+  address?: string;
+  district?: string;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  emergency_contact_relation?: string;
+  primary_language?: string;
+  abha_id?: string;
+  transport_access_barrier?: boolean;
+  financial_barrier?: boolean;
+}): Promise<{ access_token: string; user: UserProfile }> {
+  const res = await request<{ access_token: string; user: UserProfile }>('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ ...payload, role: 'PATIENT' }),
+  });
+  setStoredToken(res.access_token);
+  return res;
+}
+
+export async function assistedPatientRegistrationApi(payload: {
+  email: string;
+  password?: string;
+  full_name: string;
+  phone?: string;
+  date_of_birth?: string;
+  gender?: string;
+  blood_group?: string;
+  address?: string;
+  district?: string;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  emergency_contact_relation?: string;
+  primary_language?: string;
+  abha_id?: string;
+  transport_access_barrier?: boolean;
+  financial_barrier?: boolean;
+}): Promise<any> {
+  return request('/auth/assisted-patient-registration', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updatePatientProfileApi(payload: any): Promise<any> {
+  return request('/auth/patient-profile', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchPatientsApi(search?: string): Promise<any[]> {
+  const q = search ? `?search=${encodeURIComponent(search)}` : '';
+  return request<any[]>(`/auth/patients${q}`);
+}
+
+// 14. MEDICAL HISTORY (Conditions, Allergies, Surgeries, Medications, Family)
+export async function fetchMedicalHistory(patientId: string = 'me'): Promise<any> {
+  return request(`/medical-history/patient/${patientId}`);
+}
+
+export async function addConditionApi(patientId: string, payload: {
+  condition_name: string;
+  status?: string;
+  diagnosed_date?: string;
+  severity?: string;
+  notes?: string;
+}): Promise<any> {
+  return request(`/medical-history/patient/${patientId}/conditions`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteConditionApi(conditionId: string): Promise<any> {
+  return request(`/medical-history/conditions/${conditionId}`, { method: 'DELETE' });
+}
+
+export async function addAllergyApi(patientId: string, payload: {
+  allergen: string;
+  reaction?: string;
+  severity?: string;
+  date_noted?: string;
+  notes?: string;
+}): Promise<any> {
+  return request(`/medical-history/patient/${patientId}/allergies`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteAllergyApi(allergyId: string): Promise<any> {
+  return request(`/medical-history/allergies/${allergyId}`, { method: 'DELETE' });
+}
+
+export async function addSurgeryApi(patientId: string, payload: {
+  procedure_name: string;
+  surgery_date?: string;
+  hospital_name?: string;
+  notes?: string;
+}): Promise<any> {
+  return request(`/medical-history/patient/${patientId}/surgeries`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function addMedicationApi(patientId: string, payload: {
+  medication_name: string;
+  dosage?: string;
+  frequency?: string;
+  start_date?: string;
+  is_current?: boolean;
+  prescribed_by?: string;
+  notes?: string;
+}): Promise<any> {
+  return request(`/medical-history/patient/${patientId}/medications`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function addFamilyHistoryApi(patientId: string, payload: {
+  relationship_to_patient: string;
+  condition: string;
+  notes?: string;
+}): Promise<any> {
+  return request(`/medical-history/patient/${patientId}/family-history`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+// 15. MEDICAL RECORDS & DIAGNOSTIC REPORTS
+export async function fetchMedicalRecords(patientId: string = 'me', recordType?: string): Promise<any[]> {
+  const q = recordType ? `?record_type=${recordType}` : '';
+  return request<any[]>(`/medical-records/patient/${patientId}${q}`);
+}
+
+export async function createTextRecordApi(patientId: string, payload: {
+  record_type: string;
+  title: string;
+  description?: string;
+  facility_name?: string;
+  document_date?: string;
+  is_sensitive?: boolean;
+  case_id?: string;
+  appointment_id?: string;
+}): Promise<any> {
+  return request(`/medical-records/patient/${patientId}`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function uploadMedicalDocumentApi(patientId: string, formData: FormData): Promise<any> {
+  return request(`/medical-records/patient/${patientId}/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+}
+
+export function getMedicalRecordDownloadUrl(recordId: string): string {
+  return `${API_BASE}/medical-records/${recordId}/download`;
+}
+
+// 16. DIGITAL PRESCRIPTIONS
+export async function fetchPrescriptions(patientId: string = 'me'): Promise<any[]> {
+  return request<any[]>(`/prescriptions/patient/${patientId}`);
+}
+
+export async function createPrescriptionApi(payload: {
+  patient_id: string;
+  diagnosis: string;
+  general_instructions?: string;
+  valid_until?: string;
+  case_id?: string;
+  appointment_id?: string;
+  items: Array<{
+    medication_name: string;
+    dosage: string;
+    frequency: string;
+    duration_days: number;
+    instructions?: string;
+  }>;
+}): Promise<any> {
+  return request('/prescriptions', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updatePrescriptionStatusApi(prescriptionId: string, newStatus: string): Promise<any> {
+  return request(`/prescriptions/${prescriptionId}/status?new_status=${newStatus}`, {
+    method: 'PATCH',
+  });
+}
+
+// 17. PATIENT TREATMENT TRANSACTIONS (Strictly separate from software subscriptions)
+export async function fetchPatientTransactions(patientId: string = 'me'): Promise<any[]> {
+  return request<any[]>(`/transactions/patient/${patientId}`);
+}
+
+export async function fetchAllTreatmentTransactions(hospitalId?: string, status?: string): Promise<any[]> {
+  const params = new URLSearchParams();
+  if (hospitalId) params.append('hospital_id', hospitalId);
+  if (status) params.append('status', status);
+  const q = params.toString() ? `?${params.toString()}` : '';
+  return request<any[]>(`/transactions${q}`);
+}
+
+export async function createTreatmentInvoiceApi(payload: {
+  patient_id: string;
+  case_id?: string;
+  hospital_id?: string;
+  appointment_id?: string;
+  transaction_type: string;
+  item_description: string;
+  amount_inr: number;
+  discount_inr?: number;
+  payment_method?: string;
+  payment_status?: string;
+  notes?: string;
+}): Promise<any> {
+  return request('/transactions/invoice', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function recordTreatmentPaymentApi(transactionId: string, payload: {
+  payment_method: string;
+  transaction_reference?: string;
+  notes?: string;
+}): Promise<any> {
+  return request(`/transactions/${transactionId}/pay`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function processTreatmentRefundApi(transactionId: string, payload: {
+  refund_reason: string;
+  refund_reference?: string;
+}): Promise<any> {
+  return request(`/transactions/${transactionId}/refund`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+

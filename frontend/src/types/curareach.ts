@@ -18,6 +18,7 @@ export interface UserProfile {
   role: UserRole;
   phone?: string;
   organization_id?: string;
+  patient_identifier?: string;
   profile?: Record<string, any>;
 }
 
@@ -234,4 +235,147 @@ export interface DemoScenario {
   description: string;
   case_number?: string;
   initial_state?: string;
+}
+
+// --- NEW MEDICAL HISTORY & RECORDS TYPES ---
+export interface PatientCondition {
+  id: string;
+  condition_name: string;
+  status: string; // ACTIVE, RESOLVED, CHRONIC, CONTROLLED
+  diagnosed_date?: string;
+  severity: string; // MILD, MODERATE, SEVERE
+  notes?: string;
+}
+
+export interface PatientAllergy {
+  id: string;
+  allergen: string;
+  reaction?: string;
+  severity: 'MILD' | 'MODERATE' | 'SEVERE' | 'LIFE_THREATENING';
+  date_noted?: string;
+  notes?: string;
+}
+
+export interface PatientSurgery {
+  id: string;
+  procedure_name: string;
+  surgery_date?: string;
+  hospital_name?: string;
+  notes?: string;
+}
+
+export interface PatientMedication {
+  id: string;
+  medication_name: string;
+  dosage?: string;
+  frequency?: string;
+  start_date?: string;
+  is_current: boolean;
+  prescribed_by?: string;
+  notes?: string;
+}
+
+export interface FamilyHistoryItem {
+  id: string;
+  relationship_to_patient: string;
+  condition: string;
+  notes?: string;
+}
+
+export interface MedicalHistoryOverview {
+  patient_id: string;
+  patient_identifier: string;
+  patient_name: string;
+  blood_group?: string;
+  conditions: PatientCondition[];
+  allergies: PatientAllergy[];
+  surgeries: PatientSurgery[];
+  medications: PatientMedication[];
+  family_history: FamilyHistoryItem[];
+}
+
+export interface MedicalRecordItem {
+  id: string;
+  patient_id: string;
+  patient_identifier: string;
+  patient_name: string;
+  case_id?: string;
+  appointment_id?: string;
+  record_type: 'VISIT_NOTE' | 'PRESCRIPTION' | 'LAB_REPORT' | 'DIAGNOSTIC_IMAGING' | 'DISCHARGE_SUMMARY' | 'OTHER';
+  title: string;
+  description?: string;
+  facility_name?: string;
+  file_name?: string;
+  has_file: boolean;
+  mime_type?: string;
+  file_size_bytes?: number;
+  document_date: string;
+  is_sensitive: boolean;
+  recorder_name: string;
+  created_at: string;
+}
+
+export interface PrescriptionItemDetail {
+  id: string;
+  medication_name: string;
+  dosage: string;
+  frequency: string;
+  duration_days: number;
+  instructions?: string;
+}
+
+export interface PrescriptionDetail {
+  id: string;
+  prescription_code: string;
+  patient_id: string;
+  patient_identifier: string;
+  patient_name: string;
+  case_id?: string;
+  appointment_id?: string;
+  clinician_name: string;
+  diagnosis: string;
+  general_instructions?: string;
+  status: string;
+  issued_at: string;
+  valid_until?: string;
+  items: PrescriptionItemDetail[];
+}
+
+export interface PatientTreatmentTransaction {
+  id: string;
+  invoice_number: string;
+  patient_id: string;
+  patient_identifier: string;
+  patient_name: string;
+  hospital_name: string;
+  case_id?: string;
+  appointment_id?: string;
+  transaction_type: 'CONSULTATION' | 'LAB_TEST' | 'PHARMACY' | 'PROCEDURE' | 'HOSPITAL_ADMISSION' | 'PACKAGE';
+  item_description: string;
+  amount_inr: number;
+  discount_inr: number;
+  net_amount_inr: number;
+  payment_status: 'UNPAID' | 'PAID' | 'REFUNDED' | 'WAIVED_CSR' | 'GOVT_SCHEME_PMJAY';
+  payment_method: string;
+  transaction_reference?: string;
+  is_simulated: boolean;
+  notes?: string;
+  payment_date?: string;
+  created_at: string;
+}
+
+export interface RegisteredPatient {
+  id: string;
+  user_id: string;
+  patient_identifier: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  gender?: string;
+  dob?: string;
+  blood_group?: string;
+  district?: string;
+  abha_id?: string;
+  transport_barrier?: boolean;
+  financial_barrier?: boolean;
 }

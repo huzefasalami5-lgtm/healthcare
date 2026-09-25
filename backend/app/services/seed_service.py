@@ -13,6 +13,25 @@ from app.models.referral import Referral, ReferralStatus, ReferralResponse, Appo
 from app.models.care_rescue import FollowUpTask, TaskStatus, Notification
 from app.models.billing import SubscriptionPlan, OrganizationSubscription, DemoInvoice
 from app.models.audit import CaseStatusEvent, AgentExecution
+from app.models.medical_history import (
+    PatientCondition,
+    PatientAllergy,
+    PatientSurgery,
+    PatientMedication,
+    FamilyMedicalHistory,
+)
+from app.models.medical_records import (
+    MedicalRecord,
+    MedicalRecordType,
+    Prescription,
+    PrescriptionItem,
+)
+from app.models.treatment_billing import (
+    PatientTreatmentTransaction,
+    TransactionType,
+    PaymentStatus,
+    PaymentMethod,
+)
 
 def seed_database(db: Session) -> None:
     # Ensure all tables exist
@@ -20,6 +39,7 @@ def seed_database(db: Session) -> None:
 
     # Check if already seeded
     if db.query(User).filter(User.email == "admin@curareach.org").first():
+        seed_medical_and_financial_records(db)
         return
 
     now = datetime.now(timezone.utc)
@@ -730,4 +750,297 @@ def seed_database(db: Session) -> None:
     db.add_all([consent_e, symptoms_e, triage_e, event_e])
     db.commit()
 
+    seed_medical_and_financial_records(db)
+
     print("[SUCCESS] CuraReach 360 database seeded with users, hospitals, subscriptions, and demo Scenarios A-E.")
+
+def seed_medical_and_financial_records(db: Session) -> None:
+    now = datetime.now(timezone.utc)
+    
+    # 1. Update patient identifiers and profile details if missing
+    patients_meta = [
+        ("patient@curareach.org", "CR-PAT-2026-0101", "B+", "91-2026-4412-8891", "Sunita Patel", "+91-98450-99881", "Wife"),
+        ("patient2@curareach.org", "CR-PAT-2026-0102", "O+", "91-2026-8821-3310", "Anil Devi", "+91-98450-99882", "Husband"),
+        ("patient3@curareach.org", "CR-PAT-2026-0103", "A+", "91-2026-5541-9923", "Basavaraj Gowda", "+91-98450-99883", "Son"),
+        ("patient4@curareach.org", "CR-PAT-2026-0104", "AB+", "91-2026-1194-4421", "Geeta Naik", "+91-98450-99884", "Sister"),
+        ("patient5@curareach.org", "CR-PAT-2026-0105", "O-", "91-2026-7731-0082", "Kavita Kumar", "+91-98450-99885", "Wife"),
+    ]
+    
+    for email, pat_id, bg, abha, ec_name, ec_phone, ec_rel in patients_meta:
+        u = db.query(User).filter(User.email == email).first()
+        if u and u.patient_profile:
+            prof = u.patient_profile
+            if not prof.patient_identifier:
+                prof.patient_identifier = pat_id
+            if not prof.blood_group or prof.blood_group == "O+":
+                prof.blood_group = bg
+            if not prof.abha_id:
+                prof.abha_id = abha
+            if not prof.emergency_contact_name:
+                prof.emergency_contact_name = ec_name
+            if not prof.emergency_contact_phone:
+                prof.emergency_contact_phone = ec_phone
+            if not prof.emergency_contact_relation:
+                prof.emergency_contact_relation = ec_rel
+    db.commit()
+
+    # Check if medical history is already seeded
+    if db.query(PatientCondition).first():
+        return
+
+    # Find patient 1 (Ramesh Patel) and patient 2 (Sunita Devi)
+    u_pat1 = db.query(User).filter(User.email == "patient@curareach.org").first()
+    u_pat2 = db.query(User).filter(User.email == "patient2@curareach.org").first()
+    u_doc1 = db.query(User).filter(User.email == "doctor@curareach.org").first()
+    h1 = db.query(Hospital).filter(Hospital.name.ilike("%Civil%")).first()
+    h2 = db.query(Hospital).filter(Hospital.name.ilike("%Apex%")).first()
+    case_a = db.query(ClinicalCase).filter(ClinicalCase.case_number == "CR-2026-001").first()
+
+    if u_pat1 and u_pat1.patient_profile:
+        p1 = u_pat1.patient_profile
+        
+        # Medical History: Conditions
+        c1 = PatientCondition(
+            patient_id=p1.id,
+            condition_name="Type 2 Diabetes Mellitus",
+            status="ACTIVE",
+            diagnosed_date="2021-03-15",
+            severity="MODERATE",
+            notes="HbA1c 7.6%. Managed with oral Metformin. Routine glycemic surveillance advised."
+        )
+        c2 = PatientCondition(
+            patient_id=p1.id,
+            condition_name="Primary Essential Hypertension",
+            status="CONTROLLED",
+            diagnosed_date="2019-11-10",
+            severity="MILD",
+            notes="BP currently stabilized at 128/82 mmHg on Amlodipine 5mg."
+        )
+        
+        # Allergies with severity
+        a1 = PatientAllergy(
+            patient_id=p1.id,
+            allergen="Penicillin / Amoxicillin",
+            reaction="Anaphylactoid urticaria and facial angioedema",
+            severity="SEVERE",
+            date_noted="2017-08-20",
+            notes="CRITICAL ALLERGY: Strictly avoid all Beta-Lactam antibiotics."
+        )
+        a2 = PatientAllergy(
+            patient_id=p1.id,
+            allergen="Dust & Particulate Matter",
+            reaction="Allergic rhinitis, episodic dry cough",
+            severity="MILD",
+            date_noted="2020-01-15",
+            notes="Managed with non-sedating antihistamines as needed."
+        )
+        
+        # Surgery
+        s1 = PatientSurgery(
+            patient_id=p1.id,
+            procedure_name="Laparoscopic Appendectomy",
+            surgery_date="2018-06-12",
+            hospital_name="Shivamogga District Civil Hospital",
+            notes="Uncomplicated procedure; healed primarily without wound infection."
+        )
+        
+        # Current Medications
+        m1 = PatientMedication(
+            patient_id=p1.id,
+            medication_name="Metformin Hydrochloride",
+            dosage="500 mg",
+            frequency="Twice daily after meals",
+            start_date="2021-03-20",
+            is_current=True,
+            prescribed_by="Dr. Rajesh Kumar",
+            notes="Take with plenty of water after food"
+        )
+        m2 = PatientMedication(
+            patient_id=p1.id,
+            medication_name="Amlodipine Besylate",
+            dosage="5 mg",
+            frequency="Once daily in the morning",
+            start_date="2019-11-15",
+            is_current=True,
+            prescribed_by="Dr. Ananya Sen",
+            notes="Regular blood pressure monitoring recommended"
+        )
+        
+        # Family Medical History
+        f1 = FamilyMedicalHistory(
+            patient_id=p1.id,
+            relationship_to_patient="Father",
+            condition="Coronary Artery Disease & Myocardial Infarction",
+            notes="Underwent CABG at age 62"
+        )
+        f2 = FamilyMedicalHistory(
+            patient_id=p1.id,
+            relationship_to_patient="Mother",
+            condition="Type 2 Diabetes Mellitus",
+            notes="Diagnosed at age 54"
+        )
+        
+        db.add_all([c1, c2, a1, a2, s1, m1, m2, f1, f2])
+        db.commit()
+
+        # Medical Records & Diagnostic Reports
+        rec1 = MedicalRecord(
+            patient_id=p1.id,
+            case_id=case_a.id if case_a else None,
+            recorded_by_user_id=u_doc1.id if u_doc1 else None,
+            record_type=MedicalRecordType.LAB_REPORT,
+            title="Comprehensive Metabolic Panel & Glycated Hemoglobin (HbA1c)",
+            description="Fasting Plasma Glucose: 138 mg/dL (Elevated). HbA1c: 7.6%. Serum Creatinine: 0.9 mg/dL (Normal). eGFR: > 90 mL/min. Electrolytes within normal limits.",
+            facility_name="Shivamogga District Civil Hospital - Central Diagnostic Lab",
+            document_date="2026-09-20",
+            is_sensitive=False
+        )
+        rec2 = MedicalRecord(
+            patient_id=p1.id,
+            case_id=case_a.id if case_a else None,
+            recorded_by_user_id=u_doc1.id if u_doc1 else None,
+            record_type=MedicalRecordType.DIAGNOSTIC_IMAGING,
+            title="Chest PA Radiograph (Digital X-Ray)",
+            description="Clear bilateral lung parenchyma without active focal consolidation, effusion, or pneumothorax. Normal cardiothoracic ratio (< 0.50). Bony thorax intact.",
+            facility_name="Apex Multi-Specialty & Trauma Centre - Dept of Radiology",
+            document_date="2026-09-22",
+            is_sensitive=False
+        )
+        rec3 = MedicalRecord(
+            patient_id=p1.id,
+            case_id=case_a.id if case_a else None,
+            recorded_by_user_id=u_doc1.id if u_doc1 else None,
+            record_type=MedicalRecordType.VISIT_NOTE,
+            title="Initial Clinical Consultation & Triage Assessment Note",
+            description="Patient examined via rural primary intake. Presented with fatigue and progressive swelling. Red flags ruled out. Triage category confirmed as MODERATE. Referred to General Medicine OPD.",
+            facility_name="CuraReach Tele-Triage & Navigation Hub",
+            document_date="2026-09-24",
+            is_sensitive=False
+        )
+        db.add_all([rec1, rec2, rec3])
+        db.commit()
+
+        # Digital Prescription
+        rx1 = Prescription(
+            prescription_code="RX-2026-0101",
+            patient_id=p1.id,
+            case_id=case_a.id if case_a else None,
+            clinician_id=u_doc1.id if u_doc1 else None,
+            diagnosis="Sub-optimally Controlled Type 2 Diabetes with Peripheral Fatigue",
+            general_instructions="Maintain low glycemic diet, drink 2.5L water daily, 30-minute brisk walk daily. Severe Penicillin allergy noted.",
+            status="ACTIVE",
+            valid_until="2026-10-25"
+        )
+        db.add(rx1)
+        db.flush()
+        
+        rx_i1 = PrescriptionItem(
+            prescription_id=rx1.id,
+            medication_name="Metformin Extended Release",
+            dosage="500 mg",
+            frequency="Once daily with dinner",
+            duration_days=30,
+            instructions="Swallow whole with a glass of water"
+        )
+        rx_i2 = PrescriptionItem(
+            prescription_id=rx1.id,
+            medication_name="Glimepiride",
+            dosage="1 mg",
+            frequency="Once daily 15 minutes before breakfast",
+            duration_days=30,
+            instructions="Monitor for symptoms of hypoglycemia"
+        )
+        rx_i3 = PrescriptionItem(
+            prescription_id=rx1.id,
+            medication_name="Multivitamin & Methylcobalamin Tablet",
+            dosage="1 tab",
+            frequency="Once daily at noon",
+            duration_days=30,
+            instructions="Supportive neuro-protective supplement"
+        )
+        db.add_all([rx_i1, rx_i2, rx_i3])
+        db.commit()
+
+        # Treatment Transactions (SEPARATE from platform subscriptions; clearly simulated)
+        txn1 = PatientTreatmentTransaction(
+            invoice_number="INV-MED-2026-0101",
+            patient_id=p1.id,
+            case_id=case_a.id if case_a else None,
+            hospital_id=h1.id if h1 else None,
+            transaction_type=TransactionType.CONSULTATION,
+            item_description="Specialist Medical Officer OPD Consultation & Assessment",
+            amount_inr=300.0,
+            discount_inr=0.0,
+            net_amount_inr=300.0,
+            payment_status=PaymentStatus.PAID,
+            payment_method=PaymentMethod.UPI,
+            transaction_reference="TXN-UPI-9844210982",
+            is_simulated=True,
+            notes="Paid instantly via PhonePe / UPI gateway simulation",
+            payment_date=now - timedelta(days=2)
+        )
+        txn2 = PatientTreatmentTransaction(
+            invoice_number="INV-MED-2026-0102",
+            patient_id=p1.id,
+            case_id=case_a.id if case_a else None,
+            hospital_id=h1.id if h1 else None,
+            transaction_type=TransactionType.LAB_TEST,
+            item_description="Diagnostic Fasting Blood Panel + HbA1c Glycated Test",
+            amount_inr=650.0,
+            discount_inr=50.0,
+            net_amount_inr=600.0,
+            payment_status=PaymentStatus.PAID,
+            payment_method=PaymentMethod.CASH,
+            transaction_reference="TXN-CASH-HOSP-00219",
+            is_simulated=True,
+            notes="Paid at hospital counter; receipt issued",
+            payment_date=now - timedelta(days=1)
+        )
+        txn3 = PatientTreatmentTransaction(
+            invoice_number="INV-MED-2026-0103",
+            patient_id=p1.id,
+            case_id=case_a.id if case_a else None,
+            hospital_id=h2.id if h2 else None,
+            transaction_type=TransactionType.PHARMACY,
+            item_description="Monthly Prescription Refill: Metformin ER + Glimepiride + Multivitamins",
+            amount_inr=240.0,
+            discount_inr=0.0,
+            net_amount_inr=240.0,
+            payment_status=PaymentStatus.UNPAID,
+            payment_method=PaymentMethod.SIMULATED_GATEWAY,
+            is_simulated=True,
+            notes="Awaiting patient pharmacy counter settlement or online UPI payment"
+        )
+        db.add_all([txn1, txn2, txn3])
+        db.commit()
+
+    if u_pat2 and u_pat2.patient_profile:
+        p2 = u_pat2.patient_profile
+        c_p2 = PatientCondition(
+            patient_id=p2.id,
+            condition_name="Bronchial Asthma (Extrinsic)",
+            status="ACTIVE",
+            diagnosed_date="2022-01-10",
+            severity="MODERATE",
+            notes="Intermittent nocturnal bronchospasm exacerbated during winter months"
+        )
+        a_p2 = PatientAllergy(
+            patient_id=p2.id,
+            allergen="Sulfonamides (Sulfa Antibiotics)",
+            reaction="Diffuse pruritic maculopapular rash",
+            severity="MODERATE",
+            date_noted="2021-07-14",
+            notes="Avoid Bactrim / Septra formulations"
+        )
+        m_p2 = PatientMedication(
+            patient_id=p2.id,
+            medication_name="Salbutamol (Albuterol) MDI Inhaler",
+            dosage="100 mcg",
+            frequency="2 puffs as needed for acute shortness of breath",
+            is_current=True,
+            prescribed_by="Dr. Ananya Sen"
+        )
+        db.add_all([c_p2, a_p2, m_p2])
+        db.commit()
+
+    print("[SUCCESS] Patient medical histories, records, prescriptions, and simulated transactions initialized.")

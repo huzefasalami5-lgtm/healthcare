@@ -8,6 +8,25 @@ from app.models.referral import Referral, ReferralStatus, ReferralResponse, Appo
 from app.models.care_rescue import FollowUpTask, TaskStatus, Notification
 from app.models.billing import SubscriptionPlan, OrganizationSubscription, DemoInvoice
 from app.models.audit import CaseStatusEvent, AgentExecution, AuditLog
+from app.models.medical_history import (
+    PatientCondition,
+    PatientAllergy,
+    PatientSurgery,
+    PatientMedication,
+    FamilyMedicalHistory,
+)
+from app.models.medical_records import (
+    MedicalRecord,
+    MedicalRecordType,
+    Prescription,
+    PrescriptionItem,
+)
+from app.models.treatment_billing import (
+    PatientTreatmentTransaction,
+    TransactionType,
+    PaymentStatus,
+    PaymentMethod,
+)
 
 __all__ = [
     "Base",
@@ -42,4 +61,17 @@ __all__ = [
     "CaseStatusEvent",
     "AgentExecution",
     "AuditLog",
+    "PatientCondition",
+    "PatientAllergy",
+    "PatientSurgery",
+    "PatientMedication",
+    "FamilyMedicalHistory",
+    "MedicalRecord",
+    "MedicalRecordType",
+    "Prescription",
+    "PrescriptionItem",
+    "PatientTreatmentTransaction",
+    "TransactionType",
+    "PaymentStatus",
+    "PaymentMethod",
 ]

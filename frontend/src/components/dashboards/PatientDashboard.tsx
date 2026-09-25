@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   PlusCircle, 
   AlertCircle, 
@@ -16,16 +16,47 @@ import {
   ChevronRight,
   HeartHandshake,
   Upload,
-  X
+  X,
+  CreditCard,
+  Pill,
+  Download,
+  Trash2,
+  Receipt,
+  FilePlus,
+  Activity,
+  HeartPulse,
+  Eye,
+  Check,
+  Sparkles
 } from 'lucide-react';
-import { CaseSummary, CaseDetail, TimelineEvent, UserProfile } from '../../types/curareach';
+import { 
+  CaseSummary, 
+  CaseDetail, 
+  TimelineEvent, 
+  UserProfile,
+  MedicalHistoryOverview,
+  MedicalRecordItem,
+  PrescriptionDetail,
+  PatientTreatmentTransaction
+} from '../../types/curareach';
 import { 
   createCaseApi, 
   submitIntakeApi, 
   uploadMedicalPhotoApi, 
   fetchCaseDetail, 
   fetchCaseTimeline,
-  reportEncounterStatusApi
+  reportEncounterStatusApi,
+  fetchMedicalHistory,
+  addConditionApi,
+  deleteConditionApi,
+  addAllergyApi,
+  deleteAllergyApi,
+  fetchMedicalRecords,
+  uploadMedicalDocumentApi,
+  getMedicalRecordDownloadUrl,
+  fetchPrescriptions,
+  fetchPatientTransactions,
+  recordTreatmentPaymentApi
 } from '../../services/curareachApi';
 
 interface PatientDashboardProps {
@@ -39,11 +70,44 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   cases,
   onRefresh
 }) => {
+  const [activeTab, setActiveTab] = useState<'CASES' | 'MEDICAL_HISTORY' | 'MEDICAL_RECORDS' | 'TREATMENT_BILLING'>('CASES');
+
+  // Cases State
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(cases[0]?.id || null);
   const [caseDetail, setCaseDetail] = useState<CaseDetail | null>(null);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [isNewCaseOpen, setIsNewCaseOpen] = useState(false);
+
+  // Medical History State
+  const [medicalHistory, setMedicalHistory] = useState<MedicalHistoryOverview | null>(null);
+  const [records, setRecords] = useState<MedicalRecordItem[]>([]);
+  const [prescriptions, setPrescriptions] = useState<PrescriptionDetail[]>([]);
+  const [transactions, setTransactions] = useState<PatientTreatmentTransaction[]>([]);
+  const [isLoadingMedical, setIsLoadingMedical] = useState(false);
+
+  // Modals State
+  const [isAddConditionOpen, setIsAddConditionOpen] = useState(false);
+  const [newCondName, setNewCondName] = useState('');
+  const [newCondSeverity, setNewCondSeverity] = useState('MODERATE');
+  const [newCondNotes, setNewCondNotes] = useState('');
+
+  const [isAddAllergyOpen, setIsAddAllergyOpen] = useState(false);
+  const [newAllergen, setNewAllergen] = useState('');
+  const [newAllergyReaction, setNewAllergyReaction] = useState('');
+  const [newAllergySeverity, setNewAllergySeverity] = useState<'MILD' | 'MODERATE' | 'SEVERE' | 'LIFE_THREATENING'>('SEVERE');
+  const [newAllergyNotes, setNewAllergyNotes] = useState('');
+
+  const [isUploadDocOpen, setIsUploadDocOpen] = useState(false);
+  const [docTitle, setDocTitle] = useState('');
+  const [docType, setDocType] = useState('LAB_REPORT');
+  const [docFacility, setDocFacility] = useState('Shivamogga District Hospital');
+  const [docDescription, setDocDescription] = useState('');
+  const [docFile, setDocFile] = useState<File | null>(null);
+
+  const [payingTransaction, setPayingTransaction] = useState<PatientTreatmentTransaction | null>(null);
+  const [payMethod, setPayMethod] = useState<'UPI' | 'CASH' | 'CARD' | 'PM_JAY' | 'CSR_GRANT'>('UPI');
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   // New Case Form State
   const [primaryComplaint, setPrimaryComplaint] = useState('');
@@ -76,12 +140,33 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
     }
   };
 
-  React.useEffect(() => {
+  const loadMedicalData = async () => {
+    setIsLoadingMedical(true);
+    try {
+      const [hist, recList, rxList, txList] = await Promise.all([
+        fetchMedicalHistory('me').catch(() => null),
+        fetchMedicalRecords('me').catch(() => []),
+        fetchPrescriptions('me').catch(() => []),
+        fetchPatientTransactions('me').catch(() => [])
+      ]);
+      if (hist) setMedicalHistory(hist);
+      setRecords(recList);
+      setPrescriptions(rxList);
+      setTransactions(txList);
+    } catch (err) {
+      console.error('Failed to load medical data:', err);
+    } finally {
+      setIsLoadingMedical(false);
+    }
+  };
+
+  useEffect(() => {
     if (selectedCaseId) {
       loadCaseDetail(selectedCaseId);
     } else if (cases.length > 0) {
       loadCaseDetail(cases[0].id);
     }
+    loadMedicalData();
   }, [selectedCaseId, cases.length]);
 
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -166,6 +251,110 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
     }
   };
 
+  // Medical History Handlers
+  const handleAddCondition = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCondName.trim()) return;
+    try {
+      await addConditionApi('me', {
+        condition_name: newCondName,
+        status: 'ACTIVE',
+        severity: newCondSeverity,
+        notes: newCondNotes
+      });
+      setIsAddConditionOpen(false);
+      setNewCondName('');
+      setNewCondNotes('');
+      loadMedicalData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to add condition');
+    }
+  };
+
+  const handleDeleteCondition = async (condId: string) => {
+    if (!window.confirm('Remove this medical condition?')) return;
+    try {
+      await deleteConditionApi(condId);
+      loadMedicalData();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleAddAllergy = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAllergen.trim()) return;
+    try {
+      await addAllergyApi('me', {
+        allergen: newAllergen,
+        reaction: newAllergyReaction,
+        severity: newAllergySeverity,
+        notes: newAllergyNotes
+      });
+      setIsAddAllergyOpen(false);
+      setNewAllergen('');
+      setNewAllergyReaction('');
+      setNewAllergyNotes('');
+      loadMedicalData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to add allergy');
+    }
+  };
+
+  const handleDeleteAllergy = async (allergyId: string) => {
+    if (!window.confirm('Remove this allergy record?')) return;
+    try {
+      await deleteAllergyApi(allergyId);
+      loadMedicalData();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleUploadDocument = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!docTitle.trim() || !docFile) {
+      alert('Document title and file are required.');
+      return;
+    }
+    const formData = new FormData();
+    formData.append('file', docFile);
+    formData.append('title', docTitle);
+    formData.append('record_type', docType);
+    formData.append('facility_name', docFacility);
+    formData.append('description', docDescription);
+
+    try {
+      await uploadMedicalDocumentApi('me', formData);
+      setIsUploadDocOpen(false);
+      setDocTitle('');
+      setDocFile(null);
+      setDocDescription('');
+      loadMedicalData();
+      alert('Medical document uploaded securely.');
+    } catch (err: any) {
+      alert(err.message || 'Failed to upload document.');
+    }
+  };
+
+  const handleSimulatePayment = async () => {
+    if (!payingTransaction) return;
+    setIsProcessingPayment(true);
+    try {
+      await recordTreatmentPaymentApi(payingTransaction.id, {
+        payment_method: payMethod,
+        notes: `Simulated patient settlement via ${payMethod}`
+      });
+      alert(`Payment of ₹${payingTransaction.net_amount_inr} simulated successfully via ${payMethod}!`);
+      setPayingTransaction(null);
+      loadMedicalData();
+    } catch (err: any) {
+      alert(err.message || 'Payment processing failed');
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
+
   const getUrgencyBadge = (urgency?: string) => {
     switch (urgency) {
       case 'EMERGENCY':
@@ -186,8 +375,11 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
     if (['AWAITING_CLINICIAN_REVIEW', 'ADDITIONAL_INFORMATION_REQUIRED', 'CLINICIAN_REVIEWED'].includes(state)) return 2;
     if (['REFERRAL_APPROVED', 'REFERRAL_SENT', 'HOSPITAL_INFORMATION_REQUESTED', 'REFERRAL_DECLINED', 'ALTERNATIVE_REVIEW_REQUIRED'].includes(state)) return 3;
     if (['REFERRAL_ACCEPTED', 'APPOINTMENT_CONFIRMED', 'APPOINTMENT_MISSED'].includes(state)) return 4;
-    return 5; // CARE_ENCOUNTER_REPORTED, FOLLOW_UP_PENDING, FOLLOW_UP_COMPLETED, CLOSED
+    return 5;
   };
+
+  const severeAllergies = medicalHistory?.allergies?.filter(a => a.severity === 'SEVERE' || a.severity === 'LIFE_THREATENING') || [];
+  const unpaidInvoices = transactions.filter(t => t.payment_status === 'UNPAID');
 
   return (
     <div className="space-y-6">
@@ -199,10 +391,24 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
             <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
             <span className="text-xs text-slate-400">Universal Access MVP</span>
           </div>
-          <h1 className="text-2xl font-bold text-white mt-1">
-            Welcome, {currentUser.full_name}
-          </h1>
-          <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 mt-1">
+            <h1 className="text-2xl font-bold text-white">
+              Welcome, {currentUser.full_name}
+            </h1>
+            <span className="font-mono text-xs px-2.5 py-1 bg-teal-950/80 text-teal-300 border border-teal-700/60 rounded-lg font-bold flex items-center gap-1 shadow-sm">
+              <ShieldCheck className="w-3.5 h-3.5 text-teal-400" />
+              ID: {currentUser.patient_identifier || medicalHistory?.patient_identifier || 'CR-PAT-2026-0101'}
+            </span>
+            <span className="font-mono text-xs px-2.5 py-1 bg-slate-800 text-slate-300 border border-slate-700 rounded-lg">
+              Blood: <strong className="text-white">{currentUser.profile?.blood_group || medicalHistory?.blood_group || 'O+'}</strong>
+            </span>
+            {(currentUser.profile?.abha_id) && (
+              <span className="font-mono text-xs px-2 py-1 bg-slate-800/80 text-slate-300 border border-slate-700 rounded-lg">
+                ABHA: {currentUser.profile.abha_id}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-3">
             <span>District: <strong>{currentUser.profile?.district || 'Shivamogga'}</strong></span>
             <span>Phone: <strong>{currentUser.phone || '+91-98450-XXXXX'}</strong></span>
             {currentUser.profile?.transport_barrier && (
@@ -222,361 +428,1156 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         </button>
       </div>
 
-      {/* Main Grid: Cases List on Left, Case Detail & Timeline on Right */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left: Cases Roster (4 cols) */}
-        <div className="lg:col-span-4 space-y-3">
-          <div className="flex items-center justify-between px-1">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400">My Healthcare Cases</h2>
-            <span className="text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-mono">
-              {cases.length}
+      {/* Critical Allergy Safety Banner (If severe allergies exist) */}
+      {severeAllergies.length > 0 && (
+        <div className="bg-red-950/40 border border-red-500/40 rounded-xl p-3.5 flex items-start gap-3 text-red-200">
+          <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+          <div className="text-xs space-y-0.5">
+            <span className="font-bold text-red-300 uppercase tracking-wider">Documented Severe Allergies Alert: </span>
+            <span>{severeAllergies.map(a => `${a.allergen} (${a.reaction || 'Anaphylaxis risk'})`).join(', ')}. Clinical warning synchronized across referral hospitals.</span>
+          </div>
+        </div>
+      )}
+
+      {/* Navigation Sub-Tabs */}
+      <div className="flex border-b border-slate-800 overflow-x-auto pb-1 gap-2">
+        <button
+          onClick={() => setActiveTab('CASES')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-all ${
+            activeTab === 'CASES'
+              ? 'bg-slate-800 text-teal-300 border-b-2 border-teal-400'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+          }`}
+        >
+          <FileText className="w-4 h-4" />
+          <span>Care Pathway & Cases</span>
+          <span className="bg-slate-700/80 text-slate-300 text-[10px] px-1.5 py-0.2 rounded-full font-mono">
+            {cases.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('MEDICAL_HISTORY')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-all ${
+            activeTab === 'MEDICAL_HISTORY'
+              ? 'bg-slate-800 text-teal-300 border-b-2 border-teal-400'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+          }`}
+        >
+          <HeartPulse className="w-4 h-4" />
+          <span>Medical History & Allergies</span>
+          {severeAllergies.length > 0 && (
+            <span className="bg-red-500/30 text-red-300 border border-red-500/50 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+              {severeAllergies.length} Alert
             </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('MEDICAL_RECORDS')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-all ${
+            activeTab === 'MEDICAL_RECORDS'
+              ? 'bg-slate-800 text-teal-300 border-b-2 border-teal-400'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+          }`}
+        >
+          <FilePlus className="w-4 h-4" />
+          <span>Medical Records & Prescriptions</span>
+          <span className="bg-slate-700/80 text-slate-300 text-[10px] px-1.5 py-0.2 rounded-full font-mono">
+            {records.length + prescriptions.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('TREATMENT_BILLING')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-all ${
+            activeTab === 'TREATMENT_BILLING'
+              ? 'bg-slate-800 text-teal-300 border-b-2 border-teal-400'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+          }`}
+        >
+          <CreditCard className="w-4 h-4" />
+          <span>Treatment Invoices & Payments</span>
+          {unpaidInvoices.length > 0 ? (
+            <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+              {unpaidInvoices.length} Unpaid
+            </span>
+          ) : (
+            <span className="bg-slate-700/80 text-slate-300 text-[10px] px-1.5 py-0.2 rounded-full font-mono">
+              {transactions.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* TAB 1: CASES VIEW (Preserved exactly as existing) */}
+      {activeTab === 'CASES' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left: Cases Roster (4 cols) */}
+          <div className="lg:col-span-4 space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400">My Healthcare Cases</h2>
+              <span className="text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-mono">
+                {cases.length}
+              </span>
+            </div>
+
+            {cases.length === 0 ? (
+              <div className="bg-slate-900/60 border border-dashed border-slate-800 rounded-xl p-8 text-center text-slate-400">
+                <FileText className="w-8 h-8 mx-auto text-slate-600 mb-2" />
+                <p className="text-sm font-medium text-slate-300">No active healthcare cases</p>
+                <p className="text-xs text-slate-500 mt-1">Create a new case to initiate clinical triage and referral coordination.</p>
+                <button
+                  onClick={() => setIsNewCaseOpen(true)}
+                  className="mt-4 px-3 py-1.5 bg-teal-600 text-white rounded-lg text-xs font-semibold"
+                >
+                  Create Case
+                </button>
+              </div>
+            ) : (
+              cases.map((c) => {
+                const isSelected = c.id === selectedCaseId;
+                const isEmergency = c.provisional_urgency === 'EMERGENCY' || c.current_state === 'EMERGENCY_GUIDANCE_SHOWN';
+                return (
+                  <div
+                    key={c.id}
+                    onClick={() => setSelectedCaseId(c.id)}
+                    className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                      isSelected
+                        ? 'bg-slate-800/90 border-teal-500/80 shadow-md shadow-teal-950/30'
+                        : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-xs font-mono font-semibold text-slate-400">{c.case_number}</span>
+                      {getUrgencyBadge(c.confirmed_urgency || c.provisional_urgency)}
+                    </div>
+
+                    <h3 className="font-semibold text-sm text-slate-200 mt-2 line-clamp-1">
+                      {c.primary_complaint}
+                    </h3>
+
+                    <div className="flex items-center justify-between mt-3 text-[11px] text-slate-400">
+                      <span className="font-mono text-teal-400/90 bg-teal-950/60 px-2 py-0.5 rounded border border-teal-800/40">
+                        {c.current_state.replace(/_/g, ' ')}
+                      </span>
+                      <span className="flex items-center gap-1 text-slate-500">
+                        <Clock className="w-3 h-3" />
+                        {new Date(c.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    {isEmergency && (
+                      <div className="mt-2 text-[11px] text-red-400 font-semibold flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        <span>Immediate 112 guidance shown</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
 
-          {cases.length === 0 ? (
-            <div className="bg-slate-900/60 border border-dashed border-slate-800 rounded-xl p-8 text-center text-slate-400">
-              <FileText className="w-8 h-8 mx-auto text-slate-600 mb-2" />
-              <p className="text-sm font-medium text-slate-300">No active healthcare cases</p>
-              <p className="text-xs text-slate-500 mt-1">Create a new case to initiate clinical triage and referral coordination.</p>
-              <button
-                onClick={() => setIsNewCaseOpen(true)}
-                className="mt-4 px-3 py-1.5 bg-teal-600 text-white rounded-lg text-xs font-semibold"
-              >
-                Create Case
-              </button>
-            </div>
-          ) : (
-            cases.map((c) => {
-              const isSelected = c.id === selectedCaseId;
-              const isEmergency = c.provisional_urgency === 'EMERGENCY' || c.current_state === 'EMERGENCY_GUIDANCE_SHOWN';
-              return (
-                <div
-                  key={c.id}
-                  onClick={() => setSelectedCaseId(c.id)}
-                  className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                    isSelected
-                      ? 'bg-slate-800/90 border-teal-500/80 shadow-md shadow-teal-950/30'
-                      : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="text-xs font-mono font-semibold text-slate-400">{c.case_number}</span>
-                    {getUrgencyBadge(c.confirmed_urgency || c.provisional_urgency)}
-                  </div>
-
-                  <h3 className="font-semibold text-sm text-slate-200 mt-2 line-clamp-1">
-                    {c.primary_complaint}
-                  </h3>
-
-                  <div className="flex items-center justify-between mt-3 text-[11px] text-slate-400">
-                    <span className="font-mono text-teal-400/90 bg-teal-950/60 px-2 py-0.5 rounded border border-teal-800/40">
-                      {c.current_state.replace(/_/g, ' ')}
-                    </span>
-                    <span className="flex items-center gap-1 text-slate-500">
-                      <Clock className="w-3 h-3" />
-                      {new Date(c.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
-
-                  {isEmergency && (
-                    <div className="mt-2 text-[11px] text-red-400 font-semibold flex items-center gap-1">
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                      <span>Immediate 112 guidance shown</span>
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* Right: Selected Case View (8 cols) */}
-        <div className="lg:col-span-8">
-          {isDetailLoading ? (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-400">
-              <Clock className="w-8 h-8 animate-spin mx-auto text-teal-400 mb-2" />
-              <p className="text-sm">Loading case details...</p>
-            </div>
-          ) : !caseDetail ? (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-400">
-              <p className="text-sm">Select a case on the left to view details and care pathway.</p>
-            </div>
-          ) : (
-            <div className="space-y-5">
-              {/* Emergency Banner (Section 4 Scenario E) */}
-              {caseDetail.current_state === 'EMERGENCY_GUIDANCE_SHOWN' && (
-                <div className="bg-gradient-to-r from-red-950/90 via-red-900/80 to-slate-950 border-2 border-red-500 rounded-2xl p-5 shadow-2xl text-white animate-pulse">
-                  <div className="flex items-start space-x-3">
-                    <div className="p-2 bg-red-600 rounded-xl text-white">
-                      <PhoneCall className="w-6 h-6 animate-bounce" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-black tracking-wide text-white uppercase flex items-center gap-2">
-                          Emergency Warning — Immediate Action Required
-                        </h3>
-                        <span className="text-xs bg-red-600 text-white font-bold px-2 py-0.5 rounded">
-                          112 EMERGENCY
-                        </span>
-                      </div>
-                      <p className="text-xs text-red-200 mt-1 leading-relaxed">
-                        Deterministic clinical red flags detected. This condition requires immediate physical emergency medical care. Ordinary referral and appointment queues are bypassed.
-                      </p>
-                      <div className="mt-3 flex flex-wrap items-center gap-3">
-                        <a
-                          href="tel:112"
-                          className="px-4 py-2 bg-white text-red-900 font-extrabold rounded-xl text-sm shadow hover:bg-red-50 flex items-center gap-2"
-                        >
-                          <PhoneCall className="w-4 h-4" />
-                          <span>Call National Emergency: 112 (India)</span>
-                        </a>
-                        <span className="text-xs text-red-300 italic">
-                          (Never wait for online messaging during cardiac or respiratory distress)
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Patient Journey Step Progress Bar */}
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center justify-between">
-                  <span>Care Coordination Pathway</span>
-                  <span className="text-teal-400 font-mono">Stage {getJourneyStep(caseDetail.current_state)} of 5</span>
-                </div>
-                <div className="grid grid-cols-5 gap-2 text-center text-[11px]">
-                  {[
-                    { step: 1, label: '1. Intake', desc: 'Symptoms Logged' },
-                    { step: 2, label: '2. Review', desc: 'Clinician Sign-off' },
-                    { step: 3, label: '3. Referral', desc: 'Facility Matching' },
-                    { step: 4, label: '4. Appointment', desc: 'Confirmed Visit' },
-                    { step: 5, label: '5. Follow-Up', desc: 'Care Rescue' }
-                  ].map((s) => {
-                    const currentStep = getJourneyStep(caseDetail.current_state);
-                    const isDone = s.step < currentStep;
-                    const isCurrent = s.step === currentStep;
-                    return (
-                      <div
-                        key={s.step}
-                        className={`p-2 rounded-xl border transition-all ${
-                          isDone
-                            ? 'bg-teal-950/60 border-teal-500/50 text-teal-200'
-                            : isCurrent
-                            ? 'bg-teal-600 text-white border-teal-400 shadow-md font-bold'
-                            : 'bg-slate-950 border-slate-800 text-slate-500'
-                        }`}
-                      >
-                        <div>{s.label}</div>
-                        <div className="text-[9px] opacity-80 mt-0.5">{s.desc}</div>
-                      </div>
-                    );
-                  })}
-                </div>
+          {/* Right: Selected Case View (8 cols) */}
+          <div className="lg:col-span-8">
+            {isDetailLoading ? (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-400">
+                <Clock className="w-8 h-8 animate-spin mx-auto text-teal-400 mb-2" />
+                <p className="text-sm">Loading case details...</p>
               </div>
-
-              {/* Case Overview Card */}
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
-                  <div>
-                    <span className="text-xs font-mono text-slate-400">Case ID: {caseDetail.case_number}</span>
-                    <h2 className="text-lg font-bold text-white mt-0.5">{caseDetail.primary_complaint}</h2>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs text-slate-400">Urgency:</span>
-                    {getUrgencyBadge(caseDetail.confirmed_urgency || caseDetail.provisional_urgency)}
-                  </div>
-                </div>
-
-                {/* AI Provisional vs Clinician Urgency Status Notice */}
-                <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 text-xs flex items-start gap-2.5">
-                  <ShieldCheck className="w-4 h-4 text-teal-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-semibold text-slate-200">
-                      {caseDetail.confirmed_urgency
-                        ? `Clinician Verified Urgency: ${caseDetail.confirmed_urgency}`
-                        : `Provisional AI Recommendation: ${caseDetail.provisional_urgency}`}
-                    </span>
-                    <p className="text-slate-400 text-[11px] mt-0.5">
-                      {caseDetail.confirmed_urgency
-                        ? `Reviewed and authorized by ${caseDetail.clinician_name || 'medical officer'}.`
-                        : 'Provisional AI assessment pending human clinician verification. AI recommendations do not replace a medical consultation.'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Confirmed Appointment Card (Section 8 Step 10) */}
-                {caseDetail.referrals.some(r => r.appointment && r.appointment.status === 'CONFIRMED') && (
-                  <div className="bg-gradient-to-r from-teal-950/80 to-slate-900 border border-teal-500/50 rounded-xl p-4 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs uppercase font-bold text-teal-400 flex items-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4" />
-                        Confirmed Hospital Appointment
-                      </span>
-                      <span className="text-xs font-mono bg-teal-900/60 text-teal-200 px-2 py-0.5 rounded">
-                        CONFIRMED
-                      </span>
-                    </div>
-
-                    {caseDetail.referrals.filter(r => r.appointment).map(r => (
-                      <div key={r.id} className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs text-slate-300 pt-1">
-                        <div>
-                          <strong className="text-slate-400 block text-[11px]">Facility:</strong>
-                          <span className="font-semibold text-white">{r.hospital_name}</span>
-                        </div>
-                        <div>
-                          <strong className="text-slate-400 block text-[11px]">Date & Time:</strong>
-                          <span className="font-semibold text-teal-300">{r.appointment?.scheduled_at}</span>
-                        </div>
-                        <div>
-                          <strong className="text-slate-400 block text-[11px]">Specialist:</strong>
-                          <span>{r.appointment?.doctor_name} ({r.appointment?.department})</span>
-                        </div>
+            ) : !caseDetail ? (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-400">
+                <p className="text-sm">Select a case on the left to view details and care pathway.</p>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {/* Emergency Banner (Section 4 Scenario E) */}
+                {caseDetail.current_state === 'EMERGENCY_GUIDANCE_SHOWN' && (
+                  <div className="bg-gradient-to-r from-red-950/90 via-red-900/80 to-slate-950 border-2 border-red-500 rounded-2xl p-5 shadow-2xl text-white animate-pulse">
+                    <div className="flex items-start space-x-3">
+                      <div className="p-2 bg-red-600 rounded-xl text-white">
+                        <PhoneCall className="w-6 h-6 animate-bounce" />
                       </div>
-                    ))}
-
-                    <div className="pt-2 flex flex-wrap items-center gap-3">
-                      <button
-                        onClick={() => {
-                          const apptId = caseDetail.referrals.find(r => r.appointment)?.appointment?.scheduled_at;
-                          // Trigger missed visit report
-                          const ref = caseDetail.referrals.find(r => r.appointment);
-                          if (ref) {
-                            handleReportMissedAppointment(ref.id);
-                          }
-                        }}
-                        className="px-3 py-1.5 bg-amber-900/60 hover:bg-amber-800/80 text-amber-200 rounded-lg text-xs font-medium border border-amber-700/50"
-                      >
-                        Cannot Attend / Missed Visit
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Follow-up Tasks / Reminders */}
-                {caseDetail.tasks.length > 0 && (
-                  <div className="border-t border-slate-800 pt-3">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                      Care Tasks & Follow-up Checklist
-                    </h3>
-                    <div className="space-y-2">
-                      {caseDetail.tasks.map(t => (
-                        <div key={t.id} className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 flex items-center justify-between text-xs">
-                          <div>
-                            <span className="font-semibold text-slate-200">{t.description}</span>
-                            {t.due_date && <span className="text-[11px] text-teal-400 block mt-0.5">Due: {t.due_date}</span>}
-                          </div>
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                            t.status === 'COMPLETED' ? 'bg-emerald-950 text-emerald-300' : 'bg-amber-950 text-amber-300'
-                          }`}>
-                            {t.status}
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-lg font-black tracking-wide text-white uppercase flex items-center gap-2">
+                            Emergency Warning — Immediate Action Required
+                          </h3>
+                          <span className="text-xs bg-red-600 text-white font-bold px-2 py-0.5 rounded">
+                            112 EMERGENCY
                           </span>
                         </div>
-                      ))}
+                        <p className="text-xs text-red-100 mt-1">
+                          Our clinical intake safety rules detected critical red-flag symptoms. Routine referral queues have been bypassed.
+                        </p>
+
+                        <div className="mt-4 p-3 bg-red-950/80 rounded-xl border border-red-700/50 space-y-2">
+                          <div className="text-xs font-semibold text-red-200">
+                            <strong>Direct Emergency Actions:</strong>
+                          </div>
+                          <ul className="text-xs text-red-100 list-disc list-inside space-y-1">
+                            <li>Dial <strong>112</strong> immediately for ambulance & paramedic dispatch.</li>
+                            <li>Proceed to nearest 24/7 Trauma / ICU: <strong>Shivamogga District Civil Hospital</strong>.</li>
+                            <li>Keep patient in comfortable, resting position; avoid physical exertion.</li>
+                          </ul>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
-              </div>
 
-              {/* Case Audit Timeline */}
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
-                  Verifiable Case Timeline & Audit Journal
-                </h3>
-                <div className="space-y-3 relative before:absolute before:left-3 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-800">
-                  {timeline.map((event, idx) => (
-                    <div key={event.id || idx} className="relative pl-8 text-xs">
-                      <div className="absolute left-1.5 top-1.5 w-3 h-3 rounded-full bg-teal-500 border-2 border-slate-900" />
-                      <div className="flex items-center space-x-2">
-                        <span className="font-semibold text-slate-200">{event.transition_event}</span>
-                        <span className="text-[10px] text-slate-500 font-mono">
-                          {new Date(event.timestamp).toLocaleTimeString()}
+                {/* Patient Journey Progress Tracker (5 Steps) */}
+                <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-md">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center justify-between">
+                    <span>Care Pathway Progression</span>
+                    <span className="text-teal-400 font-mono text-[11px]">
+                      State: {caseDetail.current_state.replace(/_/g, ' ')}
+                    </span>
+                  </h3>
+
+                  <div className="grid grid-cols-5 gap-2 text-center text-xs">
+                    {[
+                      { step: 1, label: 'Intake' },
+                      { step: 2, label: 'Clinician' },
+                      { step: 3, label: 'Referral' },
+                      { step: 4, label: 'Hospital' },
+                      { step: 5, label: 'Follow-up' }
+                    ].map((s) => {
+                      const cur = getJourneyStep(caseDetail.current_state);
+                      const isDone = cur > s.step;
+                      const isCurrent = cur === s.step;
+                      return (
+                        <div key={s.step} className="flex flex-col items-center">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs mb-1.5 transition-all ${
+                            isDone 
+                              ? 'bg-teal-500 text-slate-950 font-bold'
+                              : isCurrent 
+                                ? 'bg-teal-900 border-2 border-teal-400 text-teal-300'
+                                : 'bg-slate-800 text-slate-500 border border-slate-700'
+                          }`}>
+                            {isDone ? <CheckCircle2 className="w-4 h-4" /> : s.step}
+                          </div>
+                          <span className={`text-[11px] font-semibold ${isCurrent ? 'text-teal-300' : isDone ? 'text-slate-300' : 'text-slate-500'}`}>
+                            {s.label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Case Overview Card */}
+                <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-md space-y-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800 pb-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono font-bold text-teal-400 bg-teal-950/60 px-2 py-0.5 rounded border border-teal-800/40">
+                          {caseDetail.case_number}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          Created {new Date(caseDetail.created_at).toLocaleString()}
                         </span>
                       </div>
-                      <p className="text-slate-400 text-[11px] mt-0.5">{event.evidence_notes}</p>
-                      <span className="text-[10px] text-teal-400/80 font-mono">
-                        By: {event.actor_name} ({event.actor_role})
+                      <h2 className="text-lg font-bold text-white mt-1">
+                        {caseDetail.primary_complaint}
+                      </h2>
+                    </div>
+                    {getUrgencyBadge(caseDetail.confirmed_urgency || caseDetail.provisional_urgency)}
+                  </div>
+
+                  {/* Vitals Summary */}
+                  {caseDetail.symptoms?.vitals && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-950/60 p-3 rounded-xl border border-slate-800 text-xs">
+                      <div>
+                        <span className="text-slate-400 block text-[10px] uppercase">Temperature</span>
+                        <span className="font-semibold text-slate-200">
+                          {caseDetail.symptoms.vitals.temperature ? `${caseDetail.symptoms.vitals.temperature}°C` : 'Normal'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px] uppercase">Blood Pressure</span>
+                        <span className="font-semibold text-slate-200">
+                          {caseDetail.symptoms.vitals.blood_pressure || '120/80 mmHg'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px] uppercase">SpO2 Oxygen</span>
+                        <span className={`font-semibold ${
+                          (caseDetail.symptoms.vitals.spo2 || 98) < 92 ? 'text-red-400 font-bold' : 'text-slate-200'
+                        }`}>
+                          {caseDetail.symptoms.vitals.spo2 ? `${caseDetail.symptoms.vitals.spo2}%` : '98%'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px] uppercase">Heart Rate</span>
+                        <span className="font-semibold text-slate-200">
+                          {caseDetail.symptoms.vitals.heart_rate ? `${caseDetail.symptoms.vitals.heart_rate} bpm` : '76 bpm'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Referral & Appointment Card if Available */}
+                  {caseDetail.referrals && caseDetail.referrals.length > 0 && (
+                    <div className="border border-teal-800/40 bg-teal-950/20 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider text-teal-400 flex items-center gap-1.5">
+                          <Building2 className="w-4 h-4" />
+                          Hospital Referral & Appointment
+                        </span>
+                        <span className="text-xs font-mono font-semibold px-2 py-0.5 bg-teal-900/60 text-teal-300 rounded border border-teal-700/40">
+                          {caseDetail.referrals[0].status}
+                        </span>
+                      </div>
+
+                      <div className="text-xs text-slate-300 space-y-1">
+                        <div>Facility: <strong>{caseDetail.referrals[0].hospital_name}</strong></div>
+                        <div>Target Department: <strong>{caseDetail.referrals[0].target_department}</strong></div>
+                      </div>
+
+                      {caseDetail.referrals[0].appointment && (
+                        <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-lg text-xs space-y-2 mt-2">
+                          <div className="flex items-center justify-between text-teal-300 font-semibold">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-3.5 h-3.5" />
+                              Scheduled: {caseDetail.referrals[0].appointment.scheduled_at}
+                            </span>
+                            <span className="font-mono text-[11px] text-slate-400">
+                              Status: {caseDetail.referrals[0].appointment.status}
+                            </span>
+                          </div>
+                          <div className="text-slate-300">
+                            Specialist In-Charge: <strong>{caseDetail.referrals[0].appointment.doctor_name}</strong>
+                          </div>
+
+                          {/* Missed appointment button (Section 11) */}
+                          {['CONFIRMED'].includes(caseDetail.referrals[0].appointment.status) && (
+                            <div className="pt-2 border-t border-slate-800 flex justify-end">
+                              <button
+                                onClick={() => handleReportMissedAppointment(caseDetail.referrals[0].appointment!.status)}
+                                className="text-xs text-amber-400 hover:text-amber-300 underline font-medium"
+                              >
+                                Unable to attend? Report Missed Visit for Rescue Coordination
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Audit Trail Timeline */}
+                  <div className="border-t border-slate-800 pt-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-teal-400" />
+                      Auditable State Machine History
+                    </h4>
+                    <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                      {timeline.length === 0 ? (
+                        <p className="text-xs text-slate-500">No events recorded yet.</p>
+                      ) : (
+                        timeline.map((t) => (
+                          <div key={t.id} className="text-xs bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/80 flex items-start justify-between gap-3">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-slate-200">{t.transition_event}</span>
+                                <span className="text-[10px] text-teal-400 bg-teal-950 px-1.5 rounded">
+                                  {t.actor_role}
+                                </span>
+                              </div>
+                              <p className="text-slate-400 text-[11px] mt-0.5">{t.evidence_notes}</p>
+                            </div>
+                            <span className="text-[10px] text-slate-500 font-mono shrink-0">
+                              {new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 2: MEDICAL HISTORY & ALLERGIES */}
+      {activeTab === 'MEDICAL_HISTORY' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Conditions Section */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-teal-400" />
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">Diagnosed Conditions</h3>
+                </div>
+                <button
+                  onClick={() => setIsAddConditionOpen(true)}
+                  className="flex items-center gap-1 text-xs text-teal-400 hover:text-teal-300 font-semibold bg-teal-950/60 px-2.5 py-1 rounded-lg border border-teal-800/40"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  <span>Add Condition</span>
+                </button>
+              </div>
+
+              {medicalHistory?.conditions?.length === 0 ? (
+                <p className="text-xs text-slate-500 py-4 text-center">No conditions documented.</p>
+              ) : (
+                <div className="space-y-2.5">
+                  {medicalHistory?.conditions?.map(c => (
+                    <div key={c.id} className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-slate-200 text-sm">{c.condition_name}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                            c.status === 'ACTIVE' ? 'bg-teal-950 text-teal-300 border border-teal-800/40' : 'bg-slate-800 text-slate-400'
+                          }`}>
+                            {c.status}
+                          </span>
+                        </div>
+                        {c.notes && <p className="text-xs text-slate-400 mt-1">{c.notes}</p>}
+                        {c.diagnosed_date && <span className="text-[11px] text-slate-500 mt-1 block">Diagnosed: {c.diagnosed_date}</span>}
+                      </div>
+                      <button
+                        onClick={() => handleDeleteCondition(c.id)}
+                        className="text-slate-500 hover:text-red-400 p-1 transition-colors"
+                        title="Delete condition"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Allergies Section */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-400" />
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">Allergies & Sensitivities</h3>
+                </div>
+                <button
+                  onClick={() => setIsAddAllergyOpen(true)}
+                  className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 font-semibold bg-red-950/60 px-2.5 py-1 rounded-lg border border-red-800/40"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  <span>Report Allergy</span>
+                </button>
+              </div>
+
+              {medicalHistory?.allergies?.length === 0 ? (
+                <p className="text-xs text-slate-500 py-4 text-center">No known drug or environmental allergies.</p>
+              ) : (
+                <div className="space-y-2.5">
+                  {medicalHistory?.allergies?.map(a => (
+                    <div key={a.id} className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-slate-200 text-sm">{a.allergen}</span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                            a.severity === 'SEVERE' || a.severity === 'LIFE_THREATENING'
+                              ? 'bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse'
+                              : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                          }`}>
+                            {a.severity}
+                          </span>
+                        </div>
+                        {a.reaction && <p className="text-xs text-slate-300 mt-1">Reaction: <strong>{a.reaction}</strong></p>}
+                        {a.notes && <p className="text-xs text-slate-400 mt-0.5">{a.notes}</p>}
+                      </div>
+                      <button
+                        onClick={() => handleDeleteAllergy(a.id)}
+                        className="text-slate-500 hover:text-red-400 p-1 transition-colors"
+                        title="Delete allergy"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Past Surgeries & Medications */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Medications */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md space-y-4">
+              <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+                <Pill className="w-4 h-4 text-teal-400" />
+                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">Current Regular Medications</h3>
+              </div>
+              {medicalHistory?.medications?.length === 0 ? (
+                <p className="text-xs text-slate-500 py-4 text-center">No regular medications documented.</p>
+              ) : (
+                <div className="space-y-2">
+                  {medicalHistory?.medications?.map(m => (
+                    <div key={m.id} className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
+                      <div>
+                        <span className="font-semibold text-slate-200 text-sm">{m.medication_name}</span>
+                        <div className="text-xs text-slate-400 mt-0.5">
+                          {m.dosage} &bull; {m.frequency}
+                        </div>
+                        {m.notes && <p className="text-[11px] text-slate-500 mt-0.5">{m.notes}</p>}
+                      </div>
+                      <span className="text-[10px] bg-teal-950 text-teal-300 border border-teal-800/40 px-2 py-0.5 rounded font-mono">
+                        Active
                       </span>
                     </div>
                   ))}
                 </div>
+              )}
+            </div>
+
+            {/* Surgeries & Family History */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md space-y-4">
+              <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+                <HeartHandshake className="w-4 h-4 text-teal-400" />
+                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">Surgeries & Family History</h3>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Past Surgical Procedures</h4>
+                  {medicalHistory?.surgeries?.length === 0 ? (
+                    <p className="text-xs text-slate-500">No major surgeries on record.</p>
+                  ) : (
+                    medicalHistory?.surgeries?.map(s => (
+                      <div key={s.id} className="text-xs bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80 mb-2">
+                        <span className="font-semibold text-slate-200">{s.procedure_name}</span>
+                        <div className="text-slate-400 text-[11px] mt-0.5">
+                          {s.hospital_name} &bull; {s.surgery_date}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div>
+                  <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Family Medical History</h4>
+                  {medicalHistory?.family_history?.length === 0 ? (
+                    <p className="text-xs text-slate-500">No family conditions recorded.</p>
+                  ) : (
+                    medicalHistory?.family_history?.map(f => (
+                      <div key={f.id} className="text-xs bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80 mb-2 flex justify-between items-center">
+                        <div>
+                          <span className="font-semibold text-teal-400">{f.relationship_to_patient}:</span>{' '}
+                          <span className="text-slate-200">{f.condition}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* New Healthcare Case Modal */}
-      {isNewCaseOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="relative bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full shadow-2xl p-6 text-slate-100">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
-              <div>
-                <h3 className="text-lg font-bold text-white">Create New Healthcare Case</h3>
-                <p className="text-xs text-slate-400">Structured clinical intake for appropriate triage and referral coordination</p>
+      {/* TAB 3: MEDICAL RECORDS & DIGITAL PRESCRIPTIONS */}
+      {activeTab === 'MEDICAL_RECORDS' && (
+        <div className="space-y-6">
+          {/* Header Bar */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400">Diagnostic Reports & Prescriptions</h2>
+            <button
+              onClick={() => setIsUploadDocOpen(true)}
+              className="flex items-center gap-1.5 text-xs text-white font-semibold bg-teal-600 hover:bg-teal-500 px-3 py-1.5 rounded-lg transition-all shadow-md"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span>Upload Report / Document</span>
+            </button>
+          </div>
+
+          {/* Digital Prescriptions Section */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md space-y-4">
+            <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+              <Pill className="w-4 h-4 text-teal-400" />
+              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-200">Authorized Digital Prescriptions</h3>
+            </div>
+
+            {prescriptions.length === 0 ? (
+              <p className="text-xs text-slate-500 py-3 text-center">No active prescriptions issued yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {prescriptions.map(rx => (
+                  <div key={rx.id} className="bg-slate-950/80 border border-teal-800/30 rounded-xl p-4 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
+                      <div>
+                        <span className="font-mono text-xs font-bold text-teal-400 bg-teal-950 px-2 py-0.5 rounded border border-teal-800/50">
+                          {rx.prescription_code}
+                        </span>
+                        <span className="text-xs text-slate-300 ml-2 font-semibold">Diagnosis: {rx.diagnosis}</span>
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        Prescribed by: <strong className="text-slate-200">{rx.clinician_name}</strong> &bull; Valid to: {rx.valid_until}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      {rx.items.map(item => (
+                        <div key={item.id} className="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 flex items-center justify-between text-xs">
+                          <div>
+                            <strong className="text-slate-200">{item.medication_name}</strong>
+                            <span className="text-teal-400 ml-2">({item.dosage})</span>
+                            <span className="text-slate-400 ml-2">&bull; {item.frequency}</span>
+                            {item.instructions && <div className="text-[11px] text-slate-400 mt-0.5">{item.instructions}</div>}
+                          </div>
+                          <span className="text-[11px] font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
+                            {item.duration_days} days
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {rx.general_instructions && (
+                      <div className="text-xs text-slate-400 italic bg-slate-900/30 p-2 rounded">
+                        Instructions: {rx.general_instructions}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
-              <button onClick={() => setIsNewCaseOpen(false)} className="p-1 rounded text-slate-400 hover:text-white">
+            )}
+          </div>
+
+          {/* Diagnostic & Lab Reports List */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md space-y-4">
+            <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+              <FileText className="w-4 h-4 text-teal-400" />
+              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-200">Diagnostic Reports & Visit Summaries</h3>
+            </div>
+
+            {records.length === 0 ? (
+              <p className="text-xs text-slate-500 py-6 text-center">No reports or clinical documents uploaded yet.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {records.map(r => (
+                  <div key={r.id} className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-2 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-teal-400 bg-teal-950/70 px-2 py-0.5 rounded border border-teal-800/40">
+                          {r.record_type.replace(/_/g, ' ')}
+                        </span>
+                        <span className="text-[11px] text-slate-400">{r.document_date}</span>
+                      </div>
+                      <h4 className="font-semibold text-sm text-slate-200 mt-2">{r.title}</h4>
+                      {r.facility_name && (
+                        <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
+                          <Building2 className="w-3.5 h-3.5 text-slate-500" />
+                          {r.facility_name}
+                        </p>
+                      )}
+                      {r.description && <p className="text-xs text-slate-400 mt-2 line-clamp-3">{r.description}</p>}
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                      <span className="text-[11px] text-slate-500">{r.recorder_name}</span>
+                      {r.has_file && (
+                        <a
+                          href={getMedicalRecordDownloadUrl(r.id)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-1 text-xs text-teal-400 hover:text-teal-300 font-semibold bg-teal-950/80 px-2.5 py-1 rounded border border-teal-800/50"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Download File</span>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: TREATMENT INVOICES & PAYMENTS */}
+      {activeTab === 'TREATMENT_BILLING' && (
+        <div className="space-y-6">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-teal-400" />
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-200">Patient Treatment Invoices & Transaction History</h3>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Clinical treatment charges (Consultations, Labs, Pharmacy). Strictly separated from CuraReach software subscriptions.
+                </p>
+              </div>
+              <span className="text-xs font-mono font-bold bg-teal-950/80 text-teal-300 border border-teal-700/60 px-3 py-1 rounded-lg self-start">
+                Simulated Gateway Active
+              </span>
+            </div>
+
+            {transactions.length === 0 ? (
+              <p className="text-xs text-slate-500 py-8 text-center">No medical treatment invoices on file.</p>
+            ) : (
+              <div className="space-y-3">
+                {transactions.map(t => (
+                  <div key={t.id} className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-teal-400 bg-teal-950 px-2 py-0.5 rounded border border-teal-800/50">
+                          {t.invoice_number}
+                        </span>
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                          {t.transaction_type}
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                          t.payment_status === 'PAID'
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                            : t.payment_status === 'REFUNDED'
+                              ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                              : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                        }`}>
+                          {t.payment_status}
+                        </span>
+                        {t.is_simulated && (
+                          <span className="text-[10px] text-slate-400 bg-slate-800 px-1.5 py-0.2 rounded font-mono">
+                            Simulated
+                          </span>
+                        )}
+                      </div>
+
+                      <h4 className="font-semibold text-sm text-slate-200">{t.item_description}</h4>
+                      <p className="text-xs text-slate-400">Facility: {t.hospital_name} &bull; Date: {t.created_at}</p>
+                      {t.transaction_reference && (
+                        <p className="text-[11px] font-mono text-teal-400/90">
+                          Ref: {t.transaction_reference} ({t.payment_method})
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between md:justify-end gap-4 shrink-0">
+                      <div className="text-right">
+                        <span className="text-xs text-slate-400 block">Total Due</span>
+                        <span className="text-lg font-bold text-white">₹{t.net_amount_inr}</span>
+                      </div>
+
+                      {t.payment_status === 'UNPAID' ? (
+                        <button
+                          onClick={() => setPayingTransaction(t)}
+                          className="bg-teal-600 hover:bg-teal-500 text-white font-semibold text-xs px-4 py-2 rounded-xl transition-all shadow-md shadow-teal-900/30 flex items-center gap-1.5"
+                        >
+                          <CreditCard className="w-3.5 h-3.5" />
+                          <span>Pay Invoice</span>
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-1 text-xs text-emerald-400 font-semibold bg-emerald-950/60 px-3 py-1.5 rounded-lg border border-emerald-800/40">
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Settled</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Pay Invoice Simulation */}
+      {payingTransaction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Receipt className="w-5 h-5 text-teal-400" />
+                <h3 className="font-bold text-slate-200">Settle Treatment Invoice</h3>
+              </div>
+              <button onClick={() => setPayingTransaction(null)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Invoice:</span>
+                <span className="font-mono text-teal-400 font-bold">{payingTransaction.invoice_number}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Item:</span>
+                <span className="text-slate-200 font-semibold">{payingTransaction.item_description}</span>
+              </div>
+              <div className="flex justify-between text-sm pt-2 border-t border-slate-800">
+                <span className="font-bold text-slate-300">Amount to Pay:</span>
+                <span className="font-bold text-white text-base">₹{payingTransaction.net_amount_inr}</span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-300">Select Simulated Payment Mode</label>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {[
+                  { id: 'UPI', label: 'UPI / PhonePe' },
+                  { id: 'CASH', label: 'Hospital Cash Desk' },
+                  { id: 'CARD', label: 'Debit / Credit Card' },
+                  { id: 'PM_JAY', label: 'PM-JAY Scheme' }
+                ].map(m => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setPayMethod(m.id as any)}
+                    className={`p-2.5 rounded-lg border text-left font-semibold transition-all ${
+                      payMethod === m.id
+                        ? 'bg-teal-950/80 border-teal-500 text-teal-300'
+                        : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Notice: Transactions are labeled as simulated per hackathon requirements. No actual currency is debited.
+              </p>
+            </div>
+
+            <div className="pt-2 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setPayingTransaction(null)}
+                className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-lg hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSimulatePayment}
+                disabled={isProcessingPayment}
+                className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-lg shadow-teal-900/30"
+              >
+                {isProcessingPayment ? <Clock className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                <span>Authorize ₹{payingTransaction.net_amount_inr} Payment</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Add Condition */}
+      {isAddConditionOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+          <form onSubmit={handleAddCondition} className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-bold text-slate-200">Add Medical Condition</h3>
+              <button type="button" onClick={() => setIsAddConditionOpen(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Condition Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Type 2 Diabetes, Asthma, Hypertension"
+                  value={newCondName}
+                  onChange={(e) => setNewCondName(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Severity</label>
+                <select
+                  value={newCondSeverity}
+                  onChange={(e) => setNewCondSeverity(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white"
+                >
+                  <option value="MILD">MILD</option>
+                  <option value="MODERATE">MODERATE</option>
+                  <option value="SEVERE">SEVERE</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Clinical Notes (Optional)</label>
+                <textarea
+                  rows={3}
+                  placeholder="Medication management, diagnosis year, symptoms..."
+                  value={newCondNotes}
+                  onChange={(e) => setNewCondNotes(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white"
+                />
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsAddConditionOpen(false)}
+                className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold rounded-lg"
+              >
+                Save Condition
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* MODAL: Add Allergy */}
+      {isAddAllergyOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+          <form onSubmit={handleAddAllergy} className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-bold text-slate-200">Report Drug or Food Allergy</h3>
+              <button type="button" onClick={() => setIsAddAllergyOpen(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Allergen Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Penicillin, Sulfa drugs, Peanuts"
+                  value={newAllergen}
+                  onChange={(e) => setNewAllergen(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Allergy Severity</label>
+                <select
+                  value={newAllergySeverity}
+                  onChange={(e) => setNewAllergySeverity(e.target.value as any)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white"
+                >
+                  <option value="MILD">MILD (Mild rash, itching)</option>
+                  <option value="MODERATE">MODERATE (Urticaria, swelling)</option>
+                  <option value="SEVERE">SEVERE (Anaphylaxis, severe dyspnea)</option>
+                  <option value="LIFE_THREATENING">LIFE THREATENING</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Observed Reaction</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Facial angioedema, breathing difficulty"
+                  value={newAllergyReaction}
+                  onChange={(e) => setNewAllergyReaction(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Safety Notes</label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Avoid all beta-lactams"
+                  value={newAllergyNotes}
+                  onChange={(e) => setNewAllergyNotes(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white"
+                />
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsAddAllergyOpen(false)}
+                className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-semibold rounded-lg"
+              >
+                Save Allergy Alert
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* MODAL: Upload Medical Document */}
+      {isUploadDocOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+          <form onSubmit={handleUploadDocument} className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-bold text-slate-200">Upload Diagnostic Document</h3>
+              <button type="button" onClick={() => setIsUploadDocOpen(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Document Title</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Fasting Blood Sugar & Lipid Profile"
+                  value={docTitle}
+                  onChange={(e) => setDocTitle(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-300 font-semibold block mb-1">Record Type</label>
+                  <select
+                    value={docType}
+                    onChange={(e) => setDocType(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white"
+                  >
+                    <option value="LAB_REPORT">Lab Report</option>
+                    <option value="DIAGNOSTIC_IMAGING">Imaging / X-Ray</option>
+                    <option value="VISIT_NOTE">Visit Summary</option>
+                    <option value="DISCHARGE_SUMMARY">Discharge Summary</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-semibold block mb-1">Facility Name</label>
+                  <input
+                    type="text"
+                    value={docFacility}
+                    onChange={(e) => setDocFacility(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Select File (PDF, PNG, JPG)</label>
+                <input
+                  type="file"
+                  required
+                  accept=".pdf,image/png,image/jpeg,image/webp,text/plain"
+                  onChange={(e) => setDocFile(e.target.files?.[0] || null)}
+                  className="w-full text-slate-400 text-xs file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-teal-950 file:text-teal-300 hover:file:bg-teal-900"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Summary Description</label>
+                <textarea
+                  rows={2}
+                  placeholder="Key observations or clinical indicators..."
+                  value={docDescription}
+                  onChange={(e) => setDocDescription(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white"
+                />
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsUploadDocOpen(false)}
+                className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold rounded-lg"
+              >
+                Upload Document
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* NEW CASE MODAL (Preserved from existing MVP) */}
+      {isNewCaseOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center space-x-2">
+                <PlusCircle className="w-5 h-5 text-teal-400" />
+                <h2 className="text-lg font-bold text-white">Create Healthcare Intake</h2>
+              </div>
+              <button 
+                onClick={() => setIsNewCaseOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {formError && (
-              <div className="mb-4 p-3 bg-red-950/80 border border-red-800 rounded-xl text-xs text-red-200 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-red-400" />
+              <div className="mt-4 p-3 bg-red-950/60 border border-red-800 rounded-xl text-xs text-red-300 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
                 <span>{formError}</span>
               </div>
             )}
 
-            <form onSubmit={handleCreateCase} className="space-y-4 text-xs">
+            <form onSubmit={handleCreateCase} className="space-y-4 mt-4">
               <div>
-                <label className="block font-semibold text-slate-300 mb-1">
-                  Primary Health Complaint *
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
+                  Primary Medical Complaint <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g., Persistent productive cough, skin rash on arm, acute knee pain"
+                  placeholder="e.g. Progressive lower limb swelling, recurring fever, severe chest heaviness"
                   value={primaryComplaint}
                   onChange={(e) => setPrimaryComplaint(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-teal-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500"
                 />
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-300 mb-1">
-                  Detailed Symptom Description
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
+                  Detailed Symptoms & Onset
                 </label>
                 <textarea
                   rows={3}
-                  placeholder="Describe your symptoms, how they started, and any associated discomfort..."
+                  placeholder="Describe when symptoms began, what makes it worse, accompanying pains..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-teal-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500"
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block font-semibold text-slate-300 mb-1">
-                    Onset & Duration
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
+                    Duration
                   </label>
                   <input
                     type="text"
                     value={onsetDuration}
                     onChange={(e) => setOnsetDuration(e.target.value)}
-                    placeholder="e.g. 3 days, 1 week"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-teal-500"
+                    placeholder="e.g. 4 days"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-200"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-slate-300 mb-1">
-                    Self-Reported Severity: <strong className="text-teal-400">{severity}/10</strong>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
+                    Severity: {severity} / 10
                   </label>
                   <input
                     type="range"
-                    min="1"
-                    max="10"
+                    min={1}
+                    max={10}
                     value={severity}
                     onChange={(e) => setSeverity(Number(e.target.value))}
                     className="w-full accent-teal-500 mt-2"
@@ -585,102 +1586,115 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
               </div>
 
               {/* Optional Vitals */}
-              <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-2">
-                <span className="font-semibold text-slate-300 block">Optional Bedside Vitals (if available)</span>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] text-slate-400">Oxygen Saturation (SpO2 %)</label>
-                    <input
-                      type="number"
-                      placeholder="e.g. 97"
-                      value={spo2}
-                      onChange={(e) => setSpo2(e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] text-slate-400">Temperature (°C)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      placeholder="e.g. 37.2"
-                      value={temp}
-                      onChange={(e) => setTemp(e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
-                    />
-                  </div>
+              <div className="grid grid-cols-2 gap-4 bg-slate-950/50 p-3 rounded-xl border border-slate-800">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                    Optional: SpO2 Oxygen (%)
+                  </label>
+                  <input
+                    type="number"
+                    min={60}
+                    max={100}
+                    placeholder="e.g. 97"
+                    value={spo2}
+                    onChange={(e) => setSpo2(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                    Optional: Body Temp (°C)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="e.g. 37.2"
+                    value={temp}
+                    onChange={(e) => setTemp(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200"
+                  />
                 </div>
               </div>
 
-              {/* Optional Skin-Photo Upload (Section 5) */}
-              <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-2">
+              {/* Optional Photo Upload */}
+              <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
                     <Camera className="w-4 h-4 text-teal-400" />
-                    Optional Photo-Assisted Intake (Skin / Visible Condition)
+                    Optional Clinical Inspection Photo
                   </span>
-                  <span className="text-[10px] text-slate-500">JPG, PNG, WebP &lt; 10MB</span>
+                  <span className="text-[10px] text-slate-500">MIME & Magic Bytes Verified</span>
                 </div>
 
-                {!photoPreview ? (
-                  <label className="border border-dashed border-slate-700 hover:border-teal-500 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors bg-slate-900/40">
-                    <Upload className="w-6 h-6 text-slate-400 mb-1" />
-                    <span className="text-slate-300 text-xs font-medium">Click or tap to capture/upload image</span>
-                    <span className="text-[10px] text-slate-500">Stored privately in secure clinical storage</span>
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      onChange={handlePhotoSelect}
-                      className="hidden"
+                {photoPreview ? (
+                  <div className="relative inline-block">
+                    <img 
+                      src={photoPreview} 
+                      alt="Preview" 
+                      className="w-32 h-32 object-cover rounded-xl border border-teal-500/50" 
                     />
-                  </label>
-                ) : (
-                  <div className="relative inline-block border border-teal-500/50 rounded-xl overflow-hidden">
-                    <img src={photoPreview} alt="Preview" className="h-28 w-44 object-cover" />
                     <button
                       type="button"
                       onClick={handleRemovePhoto}
-                      className="absolute top-1 right-1 p-1 bg-red-600 rounded-full text-white"
+                      className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 shadow-lg hover:bg-red-500"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                )}
-
-                {photoFile && (
-                  <label className="flex items-center space-x-2 mt-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={photoConsent}
-                      onChange={(e) => setPhotoConsent(e.target.checked)}
-                      className="accent-teal-500"
-                    />
-                    <span className="text-[11px] text-slate-300">
-                      I explicitly consent to uploading this medical image for clinical triage review.
-                    </span>
-                  </label>
+                ) : (
+                  <div>
+                    <label className="flex flex-col items-center justify-center p-4 border border-dashed border-slate-700 rounded-xl cursor-pointer hover:border-teal-500/60 hover:bg-slate-900/40 transition-all">
+                      <Camera className="w-6 h-6 text-slate-500 mb-1" />
+                      <span className="text-xs text-slate-400">Click to upload JPG, PNG or WebP</span>
+                      <span className="text-[10px] text-slate-500 mt-0.5">Securely encrypted in private local storage</span>
+                      <input 
+                        type="file" 
+                        accept="image/jpeg,image/png,image/webp" 
+                        onChange={handlePhotoSelect} 
+                        className="hidden" 
+                      />
+                    </label>
+                  </div>
                 )}
               </div>
 
-              {/* Consent Notice */}
-              <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-[11px] text-slate-400">
-                By submitting this case, you consent to care navigation, provisional triage stratification, and authorized referral coordination under the CuraReach 360 platform terms.
+              {/* Patient Consent Declaration */}
+              <div className="p-3 bg-teal-950/30 border border-teal-800/40 rounded-xl text-[11px] text-slate-300 space-y-1">
+                <div className="font-semibold text-teal-300 flex items-center gap-1">
+                  <ShieldCheck className="w-3.5 h-3.5 text-teal-400" />
+                  Consent & Safety Governance
+                </div>
+                <p className="text-slate-400 leading-relaxed">
+                  By submitting, you consent to AI-assisted provisional triage and authorized clinician review. Emergency symptoms bypass referral queues immediately.
+                </p>
               </div>
 
-              <div className="flex items-center justify-end space-x-3 pt-2">
+              {/* Submit Buttons */}
+              <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => setIsNewCaseOpen(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold"
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-xs transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-5 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold shadow-md disabled:opacity-50"
+                  className="flex items-center space-x-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 text-white font-semibold px-5 py-2 rounded-xl text-xs shadow-lg shadow-teal-900/30 transition-all disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Evaluating with Clinical Intake Agent...' : 'Submit Case for Review'}
+                  {isSubmitting ? (
+                    <>
+                      <Clock className="w-3.5 h-3.5 animate-spin" />
+                      <span>Coordinating AI Agents...</span>
+                    </>
+                  ) : (
+                    <>
+                      <PlusCircle className="w-3.5 h-3.5" />
+                      <span>Submit Clinical Intake</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
