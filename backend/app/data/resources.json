@@ -1,0 +1,33 @@
+{
+  "essential_medicines": [
+    {"name": "Paracetamol 650mg", "category": "Antipyretic / Analgesic", "level": "Sub-Centre+"},
+    {"name": "Oral Rehydration Salts (ORS)", "category": "Electrolyte", "level": "Sub-Centre+"},
+    {"name": "Salbutamol Nebulizer Solution", "category": "Respiratory Bronchodilator", "level": "PHC+"},
+    {"name": "Ceftriaxone 1g IV", "category": "Broad-Spectrum Antibiotic", "level": "CHC+"},
+    {"name": "Hydrocortisone 100mg IV", "category": "Corticosteroid", "level": "CHC+"},
+    {"name": "Oxygen Medical Grade", "category": "Life Support Gas", "level": "CHC+"},
+    {"name": "Magnesium Sulfate 50%", "category": "Obstetric Anticonvulsant", "level": "CHC+"},
+    {"name": "Vasopressors (Noradrenaline)", "category": "ICU Inotrope", "level": "District Hospital"}
+  ],
+  "diagnostics": [
+    {"name": "Pulse Oximetry", "utility": "Hypoxia screening", "required_for": ["breathing difficulty", "fever", "chest pain"]},
+    {"name": "RBS Glucometry", "utility": "Hypo/Hyperglycemia screening", "required_for": ["weakness", "altered sensorium"]},
+    {"name": "Digital Chest X-Ray", "utility": "Pneumonia, Effusion, COPD assessment", "required_for": ["breathing difficulty", "persistent fever"]},
+    {"name": "12-Lead ECG", "utility": "Cardiac ischemia, arrhythmia", "required_for": ["chest pain", "dyspnea", "tachycardia"]},
+    {"name": "Arterial Blood Gas (ABG)", "utility": "Respiratory failure, acidosis", "required_for": ["severe respiratory distress", "hypoxemia"]}
+  ],
+  "specialties": [
+    {"title": "General Duty Medical Officer", "roles": ["Primary Triage", "First-Line Stabilization"]},
+    {"title": "Pulmonologist / Chest Physician", "roles": ["Severe Lower Respiratory Infection", "COPD Exacerbation", "Ventilatory Management"]},
+    {"title": "Obstetrician & Gynecologist", "roles": ["High-Risk Pregnancy", "Eclampsia", "Post-Partum Hemorrhage"]},
+    {"title": "Pediatrician", "roles": ["Neonatal Sepsis", "Pediatric Respiratory Distress", "Severe Malnutrition"]},
+    {"title": "Critical Care Intensivist", "roles": ["Invasive Mechanical Ventilation", "Septic Shock Protocol"]}
+  ],
+  "equipment": [
+    {"name": "Oxygen Concentrator (10L)", "tier": "PHC/CHC"},
+    {"name": "Nebulizer Machine", "tier": "PHC/CHC"},
+    {"name": "Multiparameter Patient Monitor", "tier": "CHC/District Hospital"},
+    {"name": "BiPAP Non-Invasive Ventilator", "tier": "CHC/District Hospital"},
+    {"name": "Invasive ICU Ventilator", "tier": "District Hospital"}
+  ]
+}

@@ -1,0 +1,45 @@
+"""SQLAlchemy models registry for CuraReach 360"""
+from app.core.database import Base
+from app.models.user import User, PatientProfile, CommunityWorkerProfile
+from app.models.hospital import Hospital, HospitalDepartment, HospitalService, AppointmentSlot
+from app.models.case import ClinicalCase, CaseStatus, UrgencyLevel, ConsentRecord, SymptomSubmission, UploadedImage
+from app.models.clinical import TriageAssessment, ClinicianReview, ReviewAction
+from app.models.referral import Referral, ReferralStatus, ReferralResponse, Appointment, AppointmentStatus, FacilityRecommendation
+from app.models.care_rescue import FollowUpTask, TaskStatus, Notification
+from app.models.billing import SubscriptionPlan, OrganizationSubscription, DemoInvoice
+from app.models.audit import CaseStatusEvent, AgentExecution, AuditLog
+
+__all__ = [
+    "Base",
+    "User",
+    "PatientProfile",
+    "CommunityWorkerProfile",
+    "Hospital",
+    "HospitalDepartment",
+    "HospitalService",
+    "AppointmentSlot",
+    "ClinicalCase",
+    "CaseStatus",
+    "UrgencyLevel",
+    "ConsentRecord",
+    "SymptomSubmission",
+    "UploadedImage",
+    "TriageAssessment",
+    "ClinicianReview",
+    "ReviewAction",
+    "Referral",
+    "ReferralStatus",
+    "ReferralResponse",
+    "Appointment",
+    "AppointmentStatus",
+    "FacilityRecommendation",
+    "FollowUpTask",
+    "TaskStatus",
+    "Notification",
+    "SubscriptionPlan",
+    "OrganizationSubscription",
+    "DemoInvoice",
+    "CaseStatusEvent",
+    "AgentExecution",
+    "AuditLog",
+]

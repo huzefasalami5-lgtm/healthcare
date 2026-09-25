@@ -1,0 +1,312 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans transition-colors duration-300;
+    background-attachment: fixed;
+  }
+}
+
+/* Theme 1: Medical Navy (Default - Rich Clinical Blue-Navy) */
+body.theme-medical-navy {
+  background-color: #0a192f;
+  background-image: 
+    radial-gradient(ellipse at 50% 0%, rgba(20, 184, 166, 0.18) 0%, transparent 60%),
+    radial-gradient(circle at 85% 25%, rgba(59, 130, 246, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 10% 75%, rgba(14, 116, 144, 0.12) 0%, transparent 60%);
+  color: #f1f5f9;
+}
+
+/* Theme 2: Emerald Health (Healthcare & Vitality Deep Emerald) */
+body.theme-emerald-health {
+  background-color: #051e18;
+  background-image: 
+    radial-gradient(ellipse at 50% 0%, rgba(16, 185, 129, 0.22) 0%, transparent 60%),
+    radial-gradient(circle at 85% 25%, rgba(20, 184, 166, 0.18) 0%, transparent 50%),
+    radial-gradient(circle at 15% 75%, rgba(5, 150, 105, 0.12) 0%, transparent 60%);
+  color: #f1f5f9;
+}
+
+/* Theme 3: Biotech Indigo (Modern High-Tech Indigo / Violet) */
+body.theme-biotech-indigo {
+  background-color: #0f112e;
+  background-image: 
+    radial-gradient(ellipse at 50% 0%, rgba(129, 140, 248, 0.20) 0%, transparent 60%),
+    radial-gradient(circle at 85% 25%, rgba(168, 85, 247, 0.14) 0%, transparent 50%),
+    radial-gradient(circle at 15% 75%, rgba(99, 102, 241, 0.10) 0%, transparent 60%);
+  color: #f1f5f9;
+}
+
+/* Theme 4: Clinical White (Pure Crisp Hospital White - Default) */
+body.theme-clinical-white,
+body.theme-clinical-light {
+  background-color: #ffffff;
+  background-image: 
+    radial-gradient(ellipse at 50% 0%, rgba(20, 184, 166, 0.08) 0%, transparent 60%),
+    radial-gradient(circle at 85% 25%, rgba(59, 130, 246, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 10% 75%, rgba(14, 116, 144, 0.04) 0%, transparent 60%);
+  color: #0f172a;
+}
+
+/* Theme 5: Midnight Obsidian (Ultra High-Contrast Pitch Black) */
+body.theme-midnight-dark {
+  background-color: #030712;
+  background-image: 
+    radial-gradient(ellipse at 50% 0%, rgba(16, 185, 129, 0.12) 0%, transparent 60%),
+    radial-gradient(circle at 85% 30%, rgba(6, 182, 212, 0.08) 0%, transparent 50%);
+  color: #f1f5f9;
+}
+
+/* Custom Healthcare Glass & Glow Utilities */
+.glass-panel {
+  background: rgba(13, 27, 49, 0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  transition: all 0.3s ease;
+}
+
+body.theme-emerald-health .glass-panel {
+  background: rgba(8, 36, 29, 0.78);
+  border: 1px solid rgba(52, 211, 153, 0.18);
+}
+
+body.theme-biotech-indigo .glass-panel {
+  background: rgba(21, 24, 58, 0.78);
+  border: 1px solid rgba(165, 180, 252, 0.15);
+}
+
+body.theme-midnight-dark .glass-panel {
+  background: rgba(8, 12, 22, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+body.theme-clinical-white .glass-panel,
+body.theme-clinical-light .glass-panel {
+  background: #ffffff !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.03) !important;
+  color: #0f172a !important;
+}
+
+.glass-panel-glow {
+  background: rgba(13, 30, 56, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(20, 184, 166, 0.40);
+  box-shadow: 0 4px 28px -2px rgba(20, 184, 166, 0.20);
+  transition: all 0.3s ease;
+}
+
+body.theme-emerald-health .glass-panel-glow {
+  background: rgba(8, 42, 34, 0.88);
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  box-shadow: 0 4px 28px -2px rgba(16, 185, 129, 0.22);
+}
+
+body.theme-biotech-indigo .glass-panel-glow {
+  background: rgba(24, 28, 68, 0.88);
+  border: 1px solid rgba(129, 140, 248, 0.40);
+  box-shadow: 0 4px 28px -2px rgba(129, 140, 248, 0.20);
+}
+
+body.theme-clinical-white .glass-panel-glow,
+body.theme-clinical-light .glass-panel-glow {
+  background: #ffffff !important;
+  border: 1px solid rgba(20, 184, 166, 0.60) !important;
+  box-shadow: 0 4px 24px -2px rgba(20, 184, 166, 0.15) !important;
+  color: #0f172a !important;
+}
+
+.glass-panel-danger {
+  background: rgba(30, 12, 18, 0.85);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  box-shadow: 0 4px 20px -2px rgba(239, 68, 68, 0.18);
+}
+
+body.theme-clinical-white .glass-panel-danger,
+body.theme-clinical-light .glass-panel-danger {
+  background: #fff5f5 !important;
+  border: 1px solid rgba(239, 68, 68, 0.4) !important;
+  box-shadow: 0 4px 20px -2px rgba(239, 68, 68, 0.08) !important;
+  color: #991b1b !important;
+}
+
+.glass-panel-warning {
+  background: rgba(32, 22, 10, 0.85);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  box-shadow: 0 4px 20px -2px rgba(245, 158, 11, 0.15);
+}
+
+body.theme-clinical-white .glass-panel-warning,
+body.theme-clinical-light .glass-panel-warning {
+  background: #fffbeb !important;
+  border: 1px solid rgba(245, 158, 11, 0.4) !important;
+  box-shadow: 0 4px 20px -2px rgba(245, 158, 11, 0.08) !important;
+  color: #92400e !important;
+}
+
+/* ============================================================== */
+/* White Healthcare Theme (High-Contrast Clean Clinical Overrides) */
+/* ============================================================== */
+
+/* Light Wells & Inner Card Containers */
+body.theme-clinical-white .bg-slate-950,
+body.theme-clinical-white .bg-slate-950\/60,
+body.theme-clinical-white .bg-slate-950\/70,
+body.theme-clinical-white .bg-slate-950\/80,
+body.theme-clinical-white .bg-slate-900,
+body.theme-clinical-white .bg-slate-900\/40,
+body.theme-clinical-white .bg-slate-900\/50,
+body.theme-clinical-white .bg-slate-900\/60,
+body.theme-clinical-white .bg-slate-900\/70,
+body.theme-clinical-white .bg-slate-900\/80,
+body.theme-clinical-white .bg-slate-900\/90,
+body.theme-clinical-light .bg-slate-950,
+body.theme-clinical-light .bg-slate-950\/60,
+body.theme-clinical-light .bg-slate-950\/70,
+body.theme-clinical-light .bg-slate-950\/80,
+body.theme-clinical-light .bg-slate-900,
+body.theme-clinical-light .bg-slate-900\/40,
+body.theme-clinical-light .bg-slate-900\/50,
+body.theme-clinical-light .bg-slate-900\/60,
+body.theme-clinical-light .bg-slate-900\/70,
+body.theme-clinical-light .bg-slate-900\/80,
+body.theme-clinical-light .bg-slate-900\/90 {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+body.theme-clinical-white .bg-slate-800,
+body.theme-clinical-white .bg-slate-800\/40,
+body.theme-clinical-white .bg-slate-800\/50,
+body.theme-clinical-white .bg-slate-800\/60,
+body.theme-clinical-white .bg-slate-800\/70,
+body.theme-clinical-white .bg-slate-800\/80,
+body.theme-clinical-white .bg-slate-800\/90,
+body.theme-clinical-light .bg-slate-800,
+body.theme-clinical-light .bg-slate-800\/40,
+body.theme-clinical-light .bg-slate-800\/50,
+body.theme-clinical-light .bg-slate-800\/60,
+body.theme-clinical-light .bg-slate-800\/70,
+body.theme-clinical-light .bg-slate-800\/80,
+body.theme-clinical-light .bg-slate-800\/90 {
+  background-color: #f1f5f9 !important;
+  color: #1e293b !important;
+}
+
+/* Borders */
+body.theme-clinical-white .border-slate-800,
+body.theme-clinical-white .border-slate-800\/80,
+body.theme-clinical-white .border-slate-800\/60,
+body.theme-clinical-white .border-slate-700,
+body.theme-clinical-white .border-slate-700\/80,
+body.theme-clinical-white .border-slate-700\/70,
+body.theme-clinical-white .border-slate-700\/60,
+body.theme-clinical-white .border-slate-700\/50,
+body.theme-clinical-white .border-slate-600,
+body.theme-clinical-light .border-slate-800,
+body.theme-clinical-light .border-slate-800\/80,
+body.theme-clinical-light .border-slate-800\/60,
+body.theme-clinical-light .border-slate-700,
+body.theme-clinical-light .border-slate-700\/80,
+body.theme-clinical-light .border-slate-700\/70,
+body.theme-clinical-light .border-slate-700\/60,
+body.theme-clinical-light .border-slate-700\/50,
+body.theme-clinical-light .border-slate-600 {
+  border-color: #e2e8f0 !important;
+}
+
+/* High-Contrast Clinical Typography */
+body.theme-clinical-white .text-white,
+body.theme-clinical-white .text-slate-100,
+body.theme-clinical-white .text-slate-200,
+body.theme-clinical-light .text-white,
+body.theme-clinical-light .text-slate-100,
+body.theme-clinical-light .text-slate-200 {
+  color: #0f172a !important;
+}
+
+body.theme-clinical-white .text-slate-300,
+body.theme-clinical-light .text-slate-300 {
+  color: #1e293b !important;
+}
+
+body.theme-clinical-white .text-slate-400,
+body.theme-clinical-light .text-slate-400 {
+  color: #475569 !important;
+}
+
+body.theme-clinical-white .text-slate-500,
+body.theme-clinical-light .text-slate-500 {
+  color: #64748b !important;
+}
+
+/* Modals & Popovers on White Theme */
+body.theme-clinical-white div[class*="bg-slate-900"][class*="rounded-2xl"],
+body.theme-clinical-white div[class*="bg-[#0b1220]"],
+body.theme-clinical-light div[class*="bg-slate-900"][class*="rounded-2xl"],
+body.theme-clinical-light div[class*="bg-[#0b1220]"] {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+  box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.15) !important;
+}
+
+/* Inputs, Textareas, Selects */
+body.theme-clinical-white input,
+body.theme-clinical-white textarea,
+body.theme-clinical-white select,
+body.theme-clinical-light input,
+body.theme-clinical-light textarea,
+body.theme-clinical-light select {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Preserve White text on vibrant buttons */
+body.theme-clinical-white button[class*="bg-gradient-to-r"] *,
+body.theme-clinical-white button[class*="bg-teal-600"] *,
+body.theme-clinical-white button[class*="bg-emerald-600"] *,
+body.theme-clinical-white button[class*="bg-cyan-600"] *,
+body.theme-clinical-white button[class*="bg-rose-600"] *,
+body.theme-clinical-light button[class*="bg-gradient-to-r"] *,
+body.theme-clinical-light button[class*="bg-teal-600"] *,
+body.theme-clinical-light button[class*="bg-emerald-600"] *,
+body.theme-clinical-light button[class*="bg-cyan-600"] *,
+body.theme-clinical-light button[class*="bg-rose-600"] * {
+  color: #ffffff !important;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(10, 15, 26, 0.8);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(51, 65, 85, 0.8);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(20, 184, 166, 0.5);
+}
+
+/* Pulse badge animations */
+@keyframes ping-slow {
+  0% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 0.4; }
+  100% { transform: scale(1); opacity: 0.8; }
+}
+.animate-pulse-badge {
+  animation: ping-slow 2.5s infinite ease-in-out;
+}
