@@ -27,10 +27,29 @@ class Settings(BaseModel):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 hours for seamless judging & demo
     
     # Database
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./curareach360.db")
+    is_vercel: bool = bool(os.getenv("VERCEL"))
+    
+    @property
+    def get_database_url(self) -> str:
+        if self.is_vercel:
+            import shutil
+            tmp_db = "/tmp/curareach360.db"
+            if not os.path.exists(tmp_db):
+                base_db = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "curareach360.db")
+                if os.path.exists(base_db):
+                    try:
+                        shutil.copy2(base_db, tmp_db)
+                    except Exception:
+                        pass
+            return os.getenv("DATABASE_URL", f"sqlite:///{tmp_db}")
+        return os.getenv("DATABASE_URL", "sqlite:///./curareach360.db")
+
+    DATABASE_URL: str = os.getenv("DATABASE_URL", (
+        "/tmp/curareach360.db" if os.getenv("VERCEL") else "sqlite:///./curareach360.db"
+    ) if not os.getenv("VERCEL") else f"sqlite:////tmp/curareach360.db")
     
     # Private Storage
-    STORAGE_DIR: str = os.path.join(
+    STORAGE_DIR: str = "/tmp/uploads/private" if os.getenv("VERCEL") else os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
         "uploads", 
         "private"

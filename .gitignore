@@ -1,18 +1,29 @@
-# Node
+# Node dependencies & build
+node_modules/
 frontend/node_modules/
+dist/
 frontend/dist/
 frontend/.vite/
 
-# Python
+# Python cache & test artifacts
+__pycache__/
 backend/__pycache__/
 backend/*/__pycache__/
 backend/*/*/__pycache__/
+backend/*/*/*/__pycache__/
+.pytest_cache/
 backend/.pytest_cache/
 *.pyc
+
+# Vercel deployment artifacts
+.vercel/
 
 # Local private uploads (preserve directory structure)
 backend/uploads/private/*
 !backend/uploads/private/.gitkeep
+backend/app/uploads/*
+!backend/app/uploads/.gitkeep
 
 # Environment
 .env
+.env.local

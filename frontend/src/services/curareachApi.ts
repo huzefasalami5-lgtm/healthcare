@@ -13,7 +13,11 @@ import {
   DemoScenario 
 } from '../types/curareach';
 
-const API_BASE = 'http://127.0.0.1:8000/api/v1';
+const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || (
+  typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://127.0.0.1:8000/api/v1'
+    : '/api/v1'
+);
 
 // Token Management
 export function getStoredToken(): string | null {
