@@ -387,6 +387,8 @@ export async function registerPatientApi(payload: {
   blood_group?: string;
   address?: string;
   district?: string;
+  state?: string;
+  pincode?: string;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
   emergency_contact_relation?: string;

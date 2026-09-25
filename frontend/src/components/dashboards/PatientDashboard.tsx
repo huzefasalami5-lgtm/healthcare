@@ -27,7 +27,8 @@ import {
   HeartPulse,
   Eye,
   Check,
-  Sparkles
+  Sparkles,
+  UserPlus
 } from 'lucide-react';
 import { 
   CaseSummary, 
@@ -56,7 +57,8 @@ import {
   getMedicalRecordDownloadUrl,
   fetchPrescriptions,
   fetchPatientTransactions,
-  recordTreatmentPaymentApi
+  recordTreatmentPaymentApi,
+  registerPatientApi
 } from '../../services/curareachApi';
 
 interface PatientDashboardProps {
@@ -121,6 +123,31 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Self Registration Modal State
+  const [isSelfRegisterOpen, setIsSelfRegisterOpen] = useState(false);
+  const [regFullName, setRegFullName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('Password@123');
+  const [regPhone, setRegPhone] = useState('+91-98450-44332');
+  const [regDob, setRegDob] = useState('1988-04-12');
+  const [regGender, setRegGender] = useState('Female');
+  const [regBloodGroup, setRegBloodGroup] = useState('A+');
+  const [regAddress, setRegAddress] = useState('Kudligere Village, Bhadravathi');
+  const [regDistrict, setRegDistrict] = useState('Shivamogga');
+  const [regState, setRegState] = useState('Karnataka');
+  const [regPincode, setRegPincode] = useState('577201');
+  const [regLanguage, setRegLanguage] = useState('English');
+  const [regEmergencyName, setRegEmergencyName] = useState('Rangappa Gowda');
+  const [regEmergencyPhone, setRegEmergencyPhone] = useState('+91-94481-22110');
+  const [regEmergencyRelation, setRegEmergencyRelation] = useState('Spouse');
+  const [regAbhaId, setRegAbhaId] = useState('');
+  const [regTransportBarrier, setRegTransportBarrier] = useState(false);
+  const [regFinancialBarrier, setRegFinancialBarrier] = useState(false);
+  const [regConsent, setRegConsent] = useState(true);
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [regError, setRegError] = useState<string | null>(null);
+  const [regSuccessMessage, setRegSuccessMessage] = useState<string | null>(null);
 
   // Load detailed case data
   const loadCaseDetail = async (caseId: string) => {
@@ -419,13 +446,22 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={() => setIsNewCaseOpen(true)}
-          className="flex items-center justify-center space-x-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 text-white font-semibold px-5 py-2.5 rounded-xl shadow-lg shadow-teal-900/30 transition-all text-sm self-start md:self-auto"
-        >
-          <PlusCircle className="w-4 h-4" />
-          <span>New Healthcare Case</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+          <button
+            onClick={() => setIsSelfRegisterOpen(true)}
+            className="flex items-center space-x-1.5 px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-teal-300 font-semibold rounded-xl text-xs border border-teal-500/30 transition-all shadow-sm"
+          >
+            <UserPlus className="w-3.5 h-3.5 text-teal-400" />
+            <span>Register New Patient</span>
+          </button>
+          <button
+            onClick={() => setIsNewCaseOpen(true)}
+            className="flex items-center justify-center space-x-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 text-white font-semibold px-5 py-2.5 rounded-xl shadow-lg shadow-teal-900/30 transition-all text-sm"
+          >
+            <PlusCircle className="w-4 h-4" />
+            <span>New Healthcare Case</span>
+          </button>
+        </div>
       </div>
 
       {/* Critical Allergy Safety Banner (If severe allergies exist) */}
@@ -1693,6 +1729,341 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                     <>
                       <PlusCircle className="w-3.5 h-3.5" />
                       <span>Submit Clinical Intake</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Self-Registration Modal */}
+      {isSelfRegisterOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 text-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-teal-400" />
+                <h3 className="text-base font-bold text-white">Self-Service Patient Registration</h3>
+              </div>
+              <button 
+                onClick={() => setIsSelfRegisterOpen(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {regError && (
+              <div className="bg-red-950/60 border border-red-500/40 p-3 rounded-xl text-xs text-red-200 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>{regError}</span>
+              </div>
+            )}
+
+            {regSuccessMessage && (
+              <div className="bg-emerald-950/60 border border-emerald-500/40 p-3 rounded-xl text-xs text-emerald-200 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{regSuccessMessage}</span>
+              </div>
+            )}
+
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (!regFullName.trim() || !regEmail.trim()) {
+                setRegError('Please provide full name and email.');
+                return;
+              }
+              if (!regConsent) {
+                setRegError('Informed consent is required to register.');
+                return;
+              }
+              setIsRegistering(true);
+              setRegError(null);
+              try {
+                const res = await registerPatientApi({
+                  full_name: regFullName.trim(),
+                  email: regEmail.trim(),
+                  password: regPassword,
+                  phone: regPhone,
+                  date_of_birth: regDob,
+                  gender: regGender,
+                  blood_group: regBloodGroup,
+                  address: regAddress,
+                  district: regDistrict,
+                  state: regState,
+                  pincode: regPincode,
+                  primary_language: regLanguage,
+                  emergency_contact_name: regEmergencyName,
+                  emergency_contact_phone: regEmergencyPhone,
+                  emergency_contact_relation: regEmergencyRelation,
+                  abha_id: regAbhaId || undefined,
+                  transport_access_barrier: regTransportBarrier,
+                  financial_barrier: regFinancialBarrier
+                });
+                setRegSuccessMessage(`Registration successful! Unique Patient ID: ${res.user.patient_identifier}`);
+                setTimeout(() => {
+                  setIsSelfRegisterOpen(false);
+                  setRegSuccessMessage(null);
+                  onRefresh();
+                }, 1500);
+              } catch (err: any) {
+                setRegError(err.message || 'Registration failed.');
+              } finally {
+                setIsRegistering(false);
+              }
+            }} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">Full Legal Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={regFullName}
+                    onChange={(e) => setRegFullName(e.target.value)}
+                    placeholder="e.g. Lakshmi Devi"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">Email Address *</label>
+                  <input
+                    type="email"
+                    required
+                    value={regEmail}
+                    onChange={(e) => setRegEmail(e.target.value)}
+                    placeholder="e.g. lakshmi.devi@curareach.org"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">Mobile / Alternative Contact *</label>
+                  <input
+                    type="text"
+                    required
+                    value={regPhone}
+                    onChange={(e) => setRegPhone(e.target.value)}
+                    placeholder="+91-98450-XXXXX"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">Password *</label>
+                  <input
+                    type="password"
+                    required
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">Date of Birth</label>
+                  <input
+                    type="date"
+                    value={regDob}
+                    onChange={(e) => setRegDob(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">Gender</label>
+                  <select
+                    value={regGender}
+                    onChange={(e) => setRegGender(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white"
+                  >
+                    <option value="Female">Female</option>
+                    <option value="Male">Male</option>
+                    <option value="Other">Other</option>
+                    <option value="Prefer not to say">Prefer not to say</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">Blood Group</label>
+                  <select
+                    value={regBloodGroup}
+                    onChange={(e) => setRegBloodGroup(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white font-mono"
+                  >
+                    <option value="O+">O+</option>
+                    <option value="O-">O-</option>
+                    <option value="A+">A+</option>
+                    <option value="A-">A-</option>
+                    <option value="B+">B+</option>
+                    <option value="B-">B-</option>
+                    <option value="AB+">AB+</option>
+                    <option value="AB-">AB-</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">Preferred Language</label>
+                  <select
+                    value={regLanguage}
+                    onChange={(e) => setRegLanguage(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white"
+                  >
+                    <option value="Kannada">Kannada</option>
+                    <option value="English">English</option>
+                    <option value="Hindi">Hindi</option>
+                    <option value="Telugu">Telugu</option>
+                    <option value="Tamil">Tamil</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Address details */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="md:col-span-3">
+                  <label className="block text-slate-300 font-semibold mb-1">Village, Town or City Address *</label>
+                  <input
+                    type="text"
+                    required
+                    value={regAddress}
+                    onChange={(e) => setRegAddress(e.target.value)}
+                    placeholder="e.g. Kudligere Village, Bhadravathi Taluk"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">District</label>
+                  <input
+                    type="text"
+                    value={regDistrict}
+                    onChange={(e) => setRegDistrict(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">State</label>
+                  <input
+                    type="text"
+                    value={regState}
+                    onChange={(e) => setRegState(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">Pincode</label>
+                  <input
+                    type="text"
+                    value={regPincode}
+                    onChange={(e) => setRegPincode(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white"
+                  />
+                </div>
+              </div>
+
+              {/* Emergency Contact */}
+              <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                <span className="font-bold text-slate-300 block">Emergency Contact</span>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-0.5">Contact Name</label>
+                    <input
+                      type="text"
+                      value={regEmergencyName}
+                      onChange={(e) => setRegEmergencyName(e.target.value)}
+                      placeholder="Rangappa Gowda"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-0.5">Contact Phone</label>
+                    <input
+                      type="text"
+                      value={regEmergencyPhone}
+                      onChange={(e) => setRegEmergencyPhone(e.target.value)}
+                      placeholder="+91-94481-XXXXX"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-0.5">Relationship</label>
+                    <input
+                      type="text"
+                      value={regEmergencyRelation}
+                      onChange={(e) => setRegEmergencyRelation(e.target.value)}
+                      placeholder="Spouse / Parent / Sibling"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Barriers & ABHA ID */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">ABHA ID (Ayushman Bharat Health Account - Optional)</label>
+                  <input
+                    type="text"
+                    value={regAbhaId}
+                    onChange={(e) => setRegAbhaId(e.target.value)}
+                    placeholder="e.g. 91-2026-8877-6655"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white font-mono"
+                  />
+                </div>
+                <div className="flex flex-col justify-center space-y-2 pt-2">
+                  <label className="flex items-center space-x-2 text-slate-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={regTransportBarrier}
+                      onChange={(e) => setRegTransportBarrier(e.target.checked)}
+                      className="accent-teal-500 rounded"
+                    />
+                    <span>Requires Transport / Transit Assistance</span>
+                  </label>
+                  <label className="flex items-center space-x-2 text-slate-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={regFinancialBarrier}
+                      onChange={(e) => setRegFinancialBarrier(e.target.checked)}
+                      className="accent-teal-500 rounded"
+                    />
+                    <span>Financial Scheme / PM-JAY Assistance Requested</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Consent check */}
+              <div className="p-3 bg-teal-950/40 border border-teal-800/50 rounded-xl">
+                <label className="flex items-start space-x-2 text-slate-300 cursor-pointer text-xs">
+                  <input
+                    type="checkbox"
+                    checked={regConsent}
+                    onChange={(e) => setRegConsent(e.target.checked)}
+                    className="accent-teal-500 rounded mt-0.5"
+                    required
+                  />
+                  <span>
+                    <strong>Required Informed Consent:</strong> I voluntarily consent to create my CuraReach 360 health record and permit coordinating clinical officers and healthcare workers to facilitate referrals, appointment notifications, and continuity follow-up.
+                  </span>
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsSelfRegisterOpen(false)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 font-semibold rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isRegistering}
+                  className="px-5 py-2 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl shadow-lg shadow-teal-900/30 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isRegistering ? (
+                    <>
+                      <Clock className="w-3.5 h-3.5 animate-spin" />
+                      <span>Generating Patient ID & Profile...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4" />
+                      <span>Register &amp; Generate Patient ID</span>
                     </>
                   )}
                 </button>
