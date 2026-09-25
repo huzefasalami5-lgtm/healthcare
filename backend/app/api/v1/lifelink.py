@@ -18,7 +18,8 @@ from app.models.lifelink import (
     HospitalDonorRequest, DonorRequestInvitation, DonorResponse,
     AuthorizedIntroduction, DonorReferral, LifeLinkSubscriptionPlan,
     HospitalLifeLinkSubscription, LifeLinkSubscriptionInvoice,
-    DonationCategory, DonorRequestStatus, InvitationStatus, IntroductionStatus
+    DonationCategory, DonorRequestStatus, InvitationStatus, IntroductionStatus,
+    DeceasedDonationEnquiry, DeceasedEnquiryStatus
 )
 from app.services.lifelink_service import LifeLinkService, log_donor_audit
 
@@ -89,6 +90,26 @@ class EducationalReferralRequest(BaseModel):
 class SubscriptionActivateRequest(BaseModel):
     hospital_id: str
     plan_code: str = "STARTER"
+
+class DeceasedEnquiryCreateRequest(BaseModel):
+    family_member_name: str
+    family_member_contact: str
+    relationship_to_deceased: str
+    preferred_language: Optional[str] = "English"
+    deceased_name: Optional[str] = None
+    deceased_age: Optional[int] = None
+    date_of_death: Optional[str] = None
+    hospital_name: Optional[str] = None
+    current_location: str = "Shivamogga"
+    already_speaking_with_coordinator: bool = False
+    official_pledge_reference: Optional[str] = None
+    privacy_notice_accepted: bool = False
+    coordinator_contact_permission: bool = False
+
+class DeceasedEnquiryStatusUpdateRequest(BaseModel):
+    new_status: str
+    coordinator_notes: Optional[str] = None
+    hospital_id: Optional[str] = None
 
 # ====================================================================
 # DONOR ENDPOINTS
@@ -549,3 +570,169 @@ def activate_demo_subscription(
 def get_public_insights(db: Session = Depends(get_db)):
     """Aggregate public network statistics for landing section"""
     return LifeLinkService.get_aggregate_network_insights(db)
+
+
+# ====================================================================
+# FAMILY-ASSISTED DECEASED DONATION ENQUIRIES ENDPOINTS
+# ====================================================================
+
+NOTTO_OFFICIAL_GUIDANCE = {
+    "notto_portal_url": "https://notto.abdm.gov.in/",
+    "notto_helpline": "1800-11-4770",
+    "national_registry": "National Organ and Tissue Transplant Organisation (NOTTO)",
+    "time_sensitivity_notice": "Deceased organ donation can be time-sensitive. If the person is currently in a hospital, please contact the treating hospital immediately and ask for its authorized transplant coordinator.",
+    "legal_notice": "In accordance with the Transplantation of Human Organs and Tissues Act (THOTA 1994, amended 2011), CuraReach LifeLink provides educational enquiry routing only. All medical screening, family authorization, donor eligibility, retrieval, and organ allocation remain exclusively with authorized healthcare organizations and official government registries."
+}
+
+def serialize_deceased_enquiry(e: DeceasedDonationEnquiry) -> Dict[str, Any]:
+    return {
+        "id": e.id,
+        "enquiry_reference": e.enquiry_reference,
+        "family_member_name": e.family_member_name,
+        "family_member_contact": e.family_member_contact,
+        "relationship_to_deceased": e.relationship_to_deceased,
+        "preferred_language": e.preferred_language,
+        "deceased_name": e.deceased_name,
+        "deceased_age": e.deceased_age,
+        "date_of_death": e.date_of_death.isoformat() if e.date_of_death else None,
+        "hospital_name": e.hospital_name,
+        "current_location": e.current_location,
+        "already_speaking_with_coordinator": e.already_speaking_with_coordinator,
+        "official_pledge_reference": e.official_pledge_reference,
+        "privacy_notice_accepted": e.privacy_notice_accepted,
+        "coordinator_contact_permission": e.coordinator_contact_permission,
+        "enquiry_status": e.enquiry_status,
+        "assigned_organization_id": e.assigned_organization_id,
+        "assigned_organization_name": e.assigned_organization.name if e.assigned_organization else None,
+        "assigned_coordinator_id": e.assigned_coordinator_id,
+        "coordinator_notes": e.coordinator_notes,
+        "created_at": e.created_at.isoformat() if e.created_at else None,
+        "updated_at": e.updated_at.isoformat() if e.updated_at else None,
+        "official_guidance": NOTTO_OFFICIAL_GUIDANCE
+    }
+
+@router.post("/enquiries/deceased")
+def submit_deceased_enquiry(
+    req: DeceasedEnquiryCreateRequest,
+    user: Optional[User] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Submit a family-assisted deceased donation enquiry.
+    Strictly educational and routing only.
+    Never creates a living donor profile or autonomous organ match.
+    """
+    try:
+        user_id = user.id if user else None
+        enquiry = LifeLinkService.create_deceased_donation_enquiry(
+            db=db,
+            payload=req.model_dump(),
+            user_id=user_id
+        )
+        return {
+            "status": "success",
+            "message": "Enquiry submitted successfully. An authorized coordinator will review your request.",
+            "enquiry": serialize_deceased_enquiry(enquiry)
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to submit enquiry: {str(e)}")
+
+@router.get("/enquiries/deceased/my")
+def get_my_deceased_enquiries(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Retrieve all deceased donation enquiries submitted by current user"""
+    enquiries = LifeLinkService.get_user_deceased_enquiries(db, user_id=user.id)
+    return [serialize_deceased_enquiry(e) for e in enquiries]
+
+@router.get("/enquiries/deceased/{enquiry_id}")
+def get_deceased_enquiry_detail(
+    enquiry_id: str,
+    user: Optional[User] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Retrieve details and administrative status of an enquiry.
+    Strict rule: Never shows donor eligibility, organ matches, recipient info or transplant allocation.
+    """
+    enquiry = LifeLinkService.get_deceased_enquiry_by_id(db, enquiry_id=enquiry_id, current_user_id=user.id if user else None)
+    if not enquiry:
+        raise HTTPException(status_code=404, detail="Enquiry not found")
+
+    return serialize_deceased_enquiry(enquiry)
+
+@router.post("/enquiries/deceased/{enquiry_id}/withdraw")
+def withdraw_deceased_enquiry(
+    enquiry_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Allows family member to withdraw their enquiry"""
+    try:
+        enquiry = LifeLinkService.withdraw_deceased_enquiry(db, enquiry_id=enquiry_id, user_id=user.id)
+        return {
+            "status": "success",
+            "message": "Enquiry has been withdrawn.",
+            "enquiry": serialize_deceased_enquiry(enquiry)
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except PermissionError as pe:
+        raise HTTPException(status_code=403, detail=str(pe))
+
+@router.get("/hospitals/deceased-enquiries")
+def get_hospital_deceased_enquiries(
+    hospital_id: Optional[str] = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Verified hospital staff coordinator view for assigned deceased enquiries"""
+    target_hosp_id = hospital_id or user.organization_id
+    if not target_hosp_id:
+        hosp = db.query(Hospital).filter(Hospital.verification_status == "VERIFIED").first()
+        target_hosp_id = hosp.id if hosp else None
+
+    if not target_hosp_id:
+        return []
+
+    try:
+        enquiries = LifeLinkService.get_hospital_deceased_enquiries(db, hospital_id=target_hosp_id)
+        return [serialize_deceased_enquiry(e) for e in enquiries]
+    except PermissionError as pe:
+        raise HTTPException(status_code=403, detail=str(pe))
+
+@router.patch("/hospitals/deceased-enquiries/{enquiry_id}/status")
+def update_hospital_deceased_enquiry_status(
+    enquiry_id: str,
+    req: DeceasedEnquiryStatusUpdateRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Authorized hospital coordinator updates administrative status of an enquiry"""
+    target_hosp_id = req.hospital_id or user.organization_id
+    if not target_hosp_id:
+        hosp = db.query(Hospital).filter(Hospital.verification_status == "VERIFIED").first()
+        target_hosp_id = hosp.id if hosp else None
+
+    if not target_hosp_id:
+        raise HTTPException(status_code=400, detail="Hospital ID required")
+
+    try:
+        enquiry = LifeLinkService.update_deceased_enquiry_status(
+            db=db,
+            enquiry_id=enquiry_id,
+            new_status=req.new_status,
+            coordinator_notes=req.coordinator_notes,
+            coordinator_id=user.id,
+            hospital_id=target_hosp_id
+        )
+        return {
+            "status": "success",
+            "message": f"Enquiry status updated to {req.new_status}",
+            "enquiry": serialize_deceased_enquiry(enquiry)
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except PermissionError as pe:
+        raise HTTPException(status_code=403, detail=str(pe))

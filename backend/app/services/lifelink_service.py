@@ -18,7 +18,7 @@ from app.models.lifelink import (
     IntroductionAccessEvent, DonorCoordinationEvent, DonorReferral,
     DonorReferralStatus, DonorAuditEvent, LifeLinkSubscriptionPlan,
     HospitalLifeLinkSubscription, LifeLinkSubscriptionStatus,
-    HospitalVerificationStatus
+    HospitalVerificationStatus, DeceasedDonationEnquiry, DeceasedEnquiryStatus
 )
 
 BLOOD_COMPATIBILITY = {
@@ -548,3 +548,250 @@ class LifeLinkService:
                 {"city": "Holalur", "donors": 7, "status": "Active"}
             ]
         }
+
+    # ====================================================================
+    # FAMILY-ASSISTED DECEASED DONATION ENQUIRIES (EDUCATIONAL & ROUTING)
+    # ====================================================================
+
+    @staticmethod
+    def create_deceased_donation_enquiry(
+        db: Session,
+        payload: Dict[str, Any],
+        user_id: Optional[str] = None
+    ) -> DeceasedDonationEnquiry:
+        """Creates a family-assisted deceased donation enquiry.
+        Enquiry is strictly educational and administrative routing.
+        NEVER creates a living donor profile or autonomous organ match.
+        """
+        # Validate compulsory consents and family confirmations
+        if not payload.get("privacy_notice_accepted"):
+            raise ValueError("Acceptance of the privacy notice is required.")
+        if not payload.get("coordinator_contact_permission"):
+            raise ValueError("Permission for an authorized coordinator to contact you is required.")
+        if not payload.get("family_member_name") or not payload.get("family_member_contact"):
+            raise ValueError("Family member name and contact phone number are required.")
+        if not payload.get("relationship_to_deceased"):
+            raise ValueError("Relationship to the deceased relative is required.")
+
+        # Generate unique human-readable enquiry reference: CR-DEC-2026-XXXX
+        random_suffix = str(uuid.uuid4().int)[:4]
+        ref = f"CR-DEC-2026-{random_suffix}"
+
+        # Check if current_location or hospital_name matches a verified hospital in district
+        assigned_org_id = None
+        hosp_name = payload.get("hospital_name")
+        curr_loc = payload.get("current_location", "Shivamogga")
+
+        # Find verified hospital in district/city if possible
+        matched_hosp = None
+        if hosp_name:
+            matched_hosp = db.query(Hospital).filter(
+                Hospital.name.ilike(f"%{hosp_name}%"),
+                Hospital.verification_status == HospitalVerificationStatus.VERIFIED
+            ).first()
+        if not matched_hosp and curr_loc:
+            matched_hosp = db.query(Hospital).filter(
+                or_(
+                    Hospital.district.ilike(f"%{curr_loc}%"),
+                    Hospital.address.ilike(f"%{curr_loc}%")
+                ),
+                Hospital.verification_status == HospitalVerificationStatus.VERIFIED
+            ).first()
+
+        if matched_hosp:
+            assigned_org_id = matched_hosp.id
+            init_status = DeceasedEnquiryStatus.AWAITING_AUTHORIZED_COORDINATOR
+        else:
+            init_status = DeceasedEnquiryStatus.SUBMITTED
+
+        dod = payload.get("date_of_death")
+        parsed_dod = None
+        if isinstance(dod, datetime):
+            parsed_dod = dod
+        elif isinstance(dod, str) and dod.strip():
+            try:
+                cleaned_dod = dod.strip().replace("Z", "+00:00")
+                parsed_dod = datetime.fromisoformat(cleaned_dod)
+            except Exception:
+                parsed_dod = None
+
+        enquiry = DeceasedDonationEnquiry(
+            id=str(uuid.uuid4()),
+            enquiry_reference=ref,
+            submitted_by_user_id=user_id,
+            family_member_name=payload.get("family_member_name", "").strip(),
+            family_member_contact=payload.get("family_member_contact", "").strip(),
+            relationship_to_deceased=payload.get("relationship_to_deceased", "").strip(),
+            preferred_language=payload.get("preferred_language", "English"),
+            deceased_name=payload.get("deceased_name"),
+            deceased_age=payload.get("deceased_age"),
+            date_of_death=parsed_dod,
+            hospital_name=hosp_name,
+            current_location=curr_loc,
+            already_speaking_with_coordinator=bool(payload.get("already_speaking_with_coordinator", False)),
+            official_pledge_reference=payload.get("official_pledge_reference"),
+            privacy_notice_accepted=True,
+            coordinator_contact_permission=True,
+            enquiry_status=init_status,
+            assigned_organization_id=assigned_org_id,
+            coordinator_notes=None
+        )
+
+        db.add(enquiry)
+        db.commit()
+        db.refresh(enquiry)
+
+        # Audit event
+        log_donor_audit(
+            db=db,
+            action="DECEASED_ENQUIRY_SUBMITTED",
+            resource_type="DeceasedDonationEnquiry",
+            resource_id=enquiry.id,
+            actor_id=user_id,
+            hospital_id=assigned_org_id,
+            safe_metadata={
+                "enquiry_reference": ref,
+                "relationship": enquiry.relationship_to_deceased,
+                "assigned_hospital": matched_hosp.name if matched_hosp else None
+            }
+        )
+
+        return enquiry
+
+    @staticmethod
+    def get_deceased_enquiry_by_id(
+        db: Session,
+        enquiry_id: str,
+        current_user_id: Optional[str] = None
+    ) -> Optional[DeceasedDonationEnquiry]:
+        """Retrieves a single deceased donation enquiry.
+        Ensures strict access control: submitter, assigned hospital coordinator, or platform admin.
+        """
+        enquiry = db.query(DeceasedDonationEnquiry).filter(
+            or_(
+                DeceasedDonationEnquiry.id == enquiry_id,
+                DeceasedDonationEnquiry.enquiry_reference == enquiry_id
+            )
+        ).first()
+        return enquiry
+
+    @staticmethod
+    def get_user_deceased_enquiries(db: Session, user_id: str) -> List[DeceasedDonationEnquiry]:
+        """Retrieves all deceased donation enquiries submitted by this user."""
+        return db.query(DeceasedDonationEnquiry).filter(
+            DeceasedDonationEnquiry.submitted_by_user_id == user_id
+        ).order_by(DeceasedDonationEnquiry.created_at.desc()).all()
+
+    @staticmethod
+    def withdraw_deceased_enquiry(
+        db: Session,
+        enquiry_id: str,
+        user_id: str
+    ) -> DeceasedDonationEnquiry:
+        """Allows family member to withdraw their enquiry."""
+        enquiry = db.query(DeceasedDonationEnquiry).filter(
+            DeceasedDonationEnquiry.id == enquiry_id
+        ).first()
+        if not enquiry:
+            raise ValueError("Enquiry not found.")
+        
+        # Verify ownership if submitted with user_id
+        if enquiry.submitted_by_user_id and enquiry.submitted_by_user_id != user_id:
+            raise PermissionError("You can only withdraw enquiries submitted by your account.")
+
+        enquiry.enquiry_status = DeceasedEnquiryStatus.WITHDRAWN
+        enquiry.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(enquiry)
+
+        log_donor_audit(
+            db=db,
+            action="DECEASED_ENQUIRY_WITHDRAWN",
+            resource_type="DeceasedDonationEnquiry",
+            resource_id=enquiry.id,
+            actor_id=user_id,
+            safe_metadata={"enquiry_reference": enquiry.enquiry_reference}
+        )
+
+        return enquiry
+
+    @staticmethod
+    def get_hospital_deceased_enquiries(
+        db: Session,
+        hospital_id: str
+    ) -> List[DeceasedDonationEnquiry]:
+        """Returns deceased donation enquiries routed to this verified hospital."""
+        hosp = db.query(Hospital).filter(Hospital.id == hospital_id).first()
+        if not hosp or hosp.verification_status != HospitalVerificationStatus.VERIFIED:
+            raise PermissionError("Only verified hospital facilities may access assigned enquiries.")
+
+        return db.query(DeceasedDonationEnquiry).filter(
+            or_(
+                DeceasedDonationEnquiry.assigned_organization_id == hospital_id,
+                and_(
+                    DeceasedDonationEnquiry.assigned_organization_id == None,
+                    or_(
+                        DeceasedDonationEnquiry.current_location.ilike(f"%{hosp.district}%"),
+                        DeceasedDonationEnquiry.current_location.ilike(f"%{hosp.name}%")
+                    )
+                )
+            ),
+            DeceasedDonationEnquiry.enquiry_status != DeceasedEnquiryStatus.WITHDRAWN
+        ).order_by(DeceasedDonationEnquiry.created_at.desc()).all()
+
+    @staticmethod
+    def update_deceased_enquiry_status(
+        db: Session,
+        enquiry_id: str,
+        new_status: str,
+        coordinator_notes: Optional[str],
+        coordinator_id: str,
+        hospital_id: str
+    ) -> DeceasedDonationEnquiry:
+        """Updates the administrative status of a deceased donation enquiry.
+        Only verified coordinators can acknowledge, record referral, or close.
+        """
+        valid_statuses = [
+            DeceasedEnquiryStatus.ACKNOWLEDGED,
+            DeceasedEnquiryStatus.REFERRED_TO_AUTHORIZED_HOSPITAL,
+            DeceasedEnquiryStatus.CLOSED,
+            DeceasedEnquiryStatus.AWAITING_AUTHORIZED_COORDINATOR
+        ]
+        if new_status not in valid_statuses:
+            raise ValueError(f"Invalid status: {new_status}. Permitted: {valid_statuses}")
+
+        hosp = db.query(Hospital).filter(Hospital.id == hospital_id).first()
+        if not hosp or hosp.verification_status != HospitalVerificationStatus.VERIFIED:
+            raise PermissionError("Only verified hospital facilities may update enquiry status.")
+
+        enquiry = db.query(DeceasedDonationEnquiry).filter(
+            DeceasedDonationEnquiry.id == enquiry_id
+        ).first()
+        if not enquiry:
+            raise ValueError("Enquiry not found.")
+
+        enquiry.enquiry_status = new_status
+        enquiry.assigned_organization_id = hospital_id
+        enquiry.assigned_coordinator_id = coordinator_id
+        if coordinator_notes:
+            enquiry.coordinator_notes = coordinator_notes
+        enquiry.updated_at = datetime.now(timezone.utc)
+
+        db.commit()
+        db.refresh(enquiry)
+
+        log_donor_audit(
+            db=db,
+            action=f"DECEASED_ENQUIRY_{new_status}",
+            resource_type="DeceasedDonationEnquiry",
+            resource_id=enquiry.id,
+            actor_id=coordinator_id,
+            hospital_id=hospital_id,
+            safe_metadata={
+                "enquiry_reference": enquiry.enquiry_reference,
+                "new_status": new_status,
+                "notes": coordinator_notes
+            }
+        )
+
+        return enquiry

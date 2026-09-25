@@ -54,6 +54,8 @@ from app.models.lifelink import (
     LifeLinkSubscriptionInvoice,
     LifeLinkSubscriptionStatus,
     BackgroundJob,
+    DeceasedEnquiryStatus,
+    DeceasedDonationEnquiry,
 )
 
 __all__ = [
@@ -127,5 +129,7 @@ __all__ = [
     "LifeLinkSubscriptionInvoice",
     "LifeLinkSubscriptionStatus",
     "BackgroundJob",
+    "DeceasedEnquiryStatus",
+    "DeceasedDonationEnquiry",
 ]
 

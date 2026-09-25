@@ -18,7 +18,9 @@ import {
   Award,
   Lock,
   Eye,
-  Info
+  Info,
+  Users,
+  PlusCircle
 } from 'lucide-react';
 import {
   getDonorProfileApi,
@@ -30,6 +32,8 @@ import {
   getDonorActivityApi,
   recordEducationalPledgeApi
 } from '../../services/curareachApi';
+import { LifeLinkRegistrationModal } from '../lifelink/LifeLinkRegistrationModal';
+import { FamilyEnquiriesPanel } from '../lifelink/FamilyEnquiriesPanel';
 
 interface DonorDashboardProps {
   currentUser?: any;
@@ -37,7 +41,8 @@ interface DonorDashboardProps {
 }
 
 export const DonorDashboard: React.FC<DonorDashboardProps> = ({ currentUser, onRefresh }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'interests' | 'availability' | 'requests' | 'activity' | 'privacy' | 'official'>('requests');
+  const [activeTab, setActiveTab] = useState<'profile' | 'interests' | 'availability' | 'requests' | 'activity' | 'privacy' | 'official' | 'enquiries'>('requests');
+  const [isRegModalOpen, setIsRegModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<any>(null);
   const [invitations, setInvitations] = useState<any[]>([]);
@@ -204,7 +209,14 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({ currentUser, onR
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => setIsRegModalOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white text-xs font-bold shadow-lg shadow-rose-950 flex items-center gap-1.5 transition-all"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span>Register / Deceased Enquiry</span>
+            </button>
             <div className="px-4 py-2 rounded-xl bg-slate-900/80 border border-slate-700/60 text-right">
               <div className="text-xs text-slate-400">Self-Reported Blood Group</div>
               <div className="text-xl font-bold text-rose-400 font-mono flex items-center justify-end gap-1">
@@ -239,6 +251,7 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({ currentUser, onR
       <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-2">
         {[
           { id: 'requests', label: 'Incoming Requests', count: invitations.filter(i => i.invitation_status === 'PENDING').length, icon: Bell },
+          { id: 'enquiries', label: 'Family Enquiries', icon: Users },
           { id: 'profile', label: 'My Profile', icon: User },
           { id: 'interests', label: 'Donation Interests', icon: Droplet },
           { id: 'availability', label: 'Availability', icon: Clock },
@@ -365,6 +378,11 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({ currentUser, onR
             </div>
           )}
         </div>
+      )}
+
+      {/* TAB: FAMILY ENQUIRIES */}
+      {activeTab === 'enquiries' && (
+        <FamilyEnquiriesPanel onOpenNewEnquiry={() => setIsRegModalOpen(true)} />
       )}
 
       {/* TAB 2: MY PROFILE */}
@@ -737,6 +755,19 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({ currentUser, onR
           </div>
         </div>
       )}
+
+      {/* LIFELINK REGISTRATION & ENQUIRY MODAL */}
+      <LifeLinkRegistrationModal
+        isOpen={isRegModalOpen}
+        onClose={() => setIsRegModalOpen(false)}
+        onRegisteredSuccess={(ref, type) => {
+          setIsRegModalOpen(false);
+          loadDonorData();
+          if (type === 'DECEASED_ENQUIRY') {
+            setActiveTab('enquiries');
+          }
+        }}
+      />
     </div>
   );
 };

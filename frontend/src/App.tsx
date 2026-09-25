@@ -112,47 +112,6 @@ export const App: React.FC = () => {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* LifeLink Public Hero Banner */}
-        <div className="mb-6 bg-gradient-to-r from-rose-950/40 via-slate-900 to-indigo-950/40 border border-rose-900/40 rounded-2xl p-4 sm:p-5 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                New Module: CuraReach LifeLink
-              </span>
-              <span className="text-xs text-slate-400">
-                &bull; 8+ Voluntary Donors Registered in Shivamogga
-              </span>
-            </div>
-            <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-              <Heart className="w-4 h-4 text-rose-500 fill-rose-500/20" />
-              <span>Be a Volunteer Donor. Help Connect Care.</span>
-            </h2>
-            <p className="text-xs text-slate-300 max-w-2xl">
-              100% voluntary, non-remunerated donor coordination with separate contact-sharing consent. Supporting acute trauma, surgeries, and verified registry referrals.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <button
-              onClick={() => handleRoleChange('DONOR')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
-                activeRole === 'DONOR'
-                  ? 'bg-rose-500 text-white shadow-lg shadow-rose-950'
-                  : 'bg-rose-950/60 hover:bg-rose-900 text-rose-200 border border-rose-800/60'
-              }`}
-            >
-              <Heart className="w-3.5 h-3.5" />
-              <span>Volunteer Donor Portal</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => handleRoleChange('HOSPITAL_STAFF')}
-              className="px-3 py-2 bg-slate-800/80 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold border border-slate-700 transition-all"
-            >
-              <span>Hospital LifeLink Tier</span>
-            </button>
-          </div>
-        </div>
 
         {isLoading ? (
           <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">

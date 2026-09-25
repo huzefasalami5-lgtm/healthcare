@@ -22,6 +22,7 @@ Base = declarative_base()
 
 def ensure_database_schema():
     """Ensure all tables and enhanced columns exist in the database without data loss"""
+    import app.models  # noqa: F401 - ensure all ORM models are registered
     Base.metadata.create_all(bind=engine)
     with engine.connect() as conn:
         inspector = inspect(engine)

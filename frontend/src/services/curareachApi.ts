@@ -763,4 +763,105 @@ export async function getPublicNetworkInsightsApi(): Promise<any> {
   return request('/lifelink/insights');
 }
 
+// 12. LIFELINK FAMILY-ASSISTED DECEASED DONATION ENQUIRIES
+export interface DeceasedDonationEnquiry {
+  id: string;
+  enquiry_reference: string;
+  family_member_name: string;
+  family_member_contact: string;
+  relationship_to_deceased: string;
+  preferred_language: string;
+  deceased_name?: string;
+  deceased_age?: number;
+  date_of_death?: string;
+  hospital_name?: string;
+  current_location: string;
+  already_speaking_with_coordinator: boolean;
+  official_pledge_reference?: string;
+  privacy_notice_accepted: boolean;
+  coordinator_contact_permission: boolean;
+  enquiry_status: 'SUBMITTED' | 'AWAITING_AUTHORIZED_COORDINATOR' | 'REFERRED_TO_AUTHORIZED_HOSPITAL' | 'ACKNOWLEDGED' | 'CLOSED' | 'WITHDRAWN';
+  assigned_organization_id?: string;
+  assigned_organization_name?: string;
+  assigned_coordinator_id?: string;
+  coordinator_notes?: string;
+  created_at: string;
+  updated_at?: string;
+  official_guidance: {
+    notto_portal_url: string;
+    notto_helpline: string;
+    national_registry: string;
+    time_sensitivity_notice: string;
+    legal_notice: string;
+  };
+}
+
+export interface DeceasedEnquirySubmitPayload {
+  family_member_name: string;
+  family_member_contact: string;
+  relationship_to_deceased: string;
+  preferred_language?: string;
+  deceased_name?: string;
+  deceased_age?: number;
+  date_of_death?: string;
+  hospital_name?: string;
+  current_location: string;
+  already_speaking_with_coordinator?: boolean;
+  official_pledge_reference?: string;
+  privacy_notice_accepted: boolean;
+  coordinator_contact_permission: boolean;
+}
+
+export async function submitDeceasedEnquiryApi(payload: DeceasedEnquirySubmitPayload): Promise<{
+  status: string;
+  message: string;
+  enquiry: DeceasedDonationEnquiry;
+}> {
+  return request('/lifelink/enquiries/deceased', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getMyDeceasedEnquiriesApi(): Promise<DeceasedDonationEnquiry[]> {
+  return request<DeceasedDonationEnquiry[]>('/lifelink/enquiries/deceased/my');
+}
+
+export async function getDeceasedEnquiryDetailApi(enquiryId: string): Promise<DeceasedDonationEnquiry> {
+  return request<DeceasedDonationEnquiry>(`/lifelink/enquiries/deceased/${enquiryId}`);
+}
+
+export async function withdrawDeceasedEnquiryApi(enquiryId: string): Promise<{
+  status: string;
+  message: string;
+  enquiry: DeceasedDonationEnquiry;
+}> {
+  return request(`/lifelink/enquiries/deceased/${enquiryId}/withdraw`, {
+    method: 'POST',
+  });
+}
+
+export async function getHospitalDeceasedEnquiriesApi(hospitalId?: string): Promise<DeceasedDonationEnquiry[]> {
+  const q = hospitalId ? `?hospital_id=${encodeURIComponent(hospitalId)}` : '';
+  return request<DeceasedDonationEnquiry[]>(`/lifelink/hospitals/deceased-enquiries${q}`);
+}
+
+export async function updateDeceasedEnquiryStatusApi(
+  enquiryId: string,
+  payload: {
+    new_status: string;
+    coordinator_notes?: string;
+    hospital_id?: string;
+  }
+): Promise<{
+  status: string;
+  message: string;
+  enquiry: DeceasedDonationEnquiry;
+}> {
+  return request(`/lifelink/hospitals/deceased-enquiries/${enquiryId}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
 

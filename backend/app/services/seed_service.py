@@ -49,6 +49,8 @@ from app.models.lifelink import (
     LifeLinkSubscriptionPlan,
     HospitalLifeLinkSubscription,
     LifeLinkSubscriptionInvoice,
+    DeceasedDonationEnquiry,
+    DeceasedEnquiryStatus,
 )
 
 def seed_database(db: Session) -> None:
@@ -59,6 +61,7 @@ def seed_database(db: Session) -> None:
     if db.query(User).filter(User.email == "admin@curareach.org").first():
         seed_medical_and_financial_records(db)
         seed_lifelink_records(db)
+        seed_deceased_enquiry_records(db)
         return
 
     now = datetime.now(timezone.utc)
@@ -1270,4 +1273,38 @@ def seed_lifelink_records(db: Session) -> None:
 
 
     print("[SUCCESS] CuraReach LifeLink seeded with 8 voluntary donors, plans, requests, and authorized introduction.")
+
+def seed_deceased_enquiry_records(db: Session) -> None:
+    """Seed initial sample family-assisted deceased donation enquiry"""
+    if db.query(DeceasedDonationEnquiry).first():
+        return
+
+    now = datetime.now(timezone.utc)
+    hosp = db.query(Hospital).filter(Hospital.verification_status == "VERIFIED").first()
+    donor_u = db.query(User).filter(User.role == Role.DONOR).first()
+
+    e1 = DeceasedDonationEnquiry(
+        id="dec-enq-1001",
+        enquiry_reference="CR-DEC-2026-1001",
+        submitted_by_user_id=donor_u.id if donor_u else None,
+        family_member_name="Sunil Patil",
+        family_member_contact="+91-98451-22334",
+        relationship_to_deceased="Son",
+        preferred_language="Kannada",
+        deceased_name="Late Sh. Anand Patil",
+        deceased_age=68,
+        date_of_death=now - timedelta(hours=8),
+        hospital_name="Shivamogga District Civil Hospital",
+        current_location="Shivamogga",
+        already_speaking_with_coordinator=True,
+        official_pledge_reference="NOTTO-PLG-2024-88912",
+        privacy_notice_accepted=True,
+        coordinator_contact_permission=True,
+        enquiry_status=DeceasedEnquiryStatus.AWAITING_AUTHORIZED_COORDINATOR,
+        assigned_organization_id=hosp.id if hosp else None,
+        coordinator_notes="Family approached treating ICU team. Form 8 statutory consent pending medical fitness review."
+    )
+    db.add(e1)
+    db.commit()
+    print("[SUCCESS] CuraReach LifeLink seeded with initial deceased donation enquiry.")
 

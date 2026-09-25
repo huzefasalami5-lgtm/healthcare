@@ -64,6 +64,14 @@ class DonorReferralStatus:
     CLOSED = "CLOSED"
     WITHDRAWN = "WITHDRAWN"
 
+class DeceasedEnquiryStatus:
+    SUBMITTED = "SUBMITTED"
+    AWAITING_AUTHORIZED_COORDINATOR = "AWAITING_AUTHORIZED_COORDINATOR"
+    REFERRED_TO_AUTHORIZED_HOSPITAL = "REFERRED_TO_AUTHORIZED_HOSPITAL"
+    ACKNOWLEDGED = "ACKNOWLEDGED"
+    CLOSED = "CLOSED"
+    WITHDRAWN = "WITHDRAWN"
+
 class LifeLinkSubscriptionStatus:
     TRIAL = "TRIAL"
     ACTIVE = "ACTIVE"
@@ -321,3 +329,33 @@ class BackgroundJob(Base):
     idempotency_key = Column(String(100), unique=True, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+class DeceasedDonationEnquiry(Base):
+    __tablename__ = "deceased_donation_enquiries"
+    
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    enquiry_reference = Column(String(50), unique=True, nullable=False, index=True)
+    submitted_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
+    family_member_name = Column(Text, nullable=False)
+    family_member_contact = Column(Text, nullable=False)
+    relationship_to_deceased = Column(Text, nullable=False)
+    preferred_language = Column(Text, default="English")
+    deceased_name = Column(Text, nullable=True)
+    deceased_age = Column(Integer, nullable=True)
+    date_of_death = Column(DateTime(timezone=True), nullable=True)
+    hospital_name = Column(Text, nullable=True)
+    current_location = Column(Text, nullable=False)
+    already_speaking_with_coordinator = Column(Boolean, default=False)
+    official_pledge_reference = Column(Text, nullable=True)
+    privacy_notice_accepted = Column(Boolean, default=False, nullable=False)
+    coordinator_contact_permission = Column(Boolean, default=False, nullable=False)
+    enquiry_status = Column(String(50), default=DeceasedEnquiryStatus.SUBMITTED, nullable=False, index=True)
+    assigned_organization_id = Column(String(36), ForeignKey("hospitals.id"), nullable=True, index=True)
+    assigned_coordinator_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
+    coordinator_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    submitted_by_user = relationship("User", foreign_keys=[submitted_by_user_id])
+    assigned_organization = relationship("Hospital", foreign_keys=[assigned_organization_id])
+    assigned_coordinator = relationship("User", foreign_keys=[assigned_coordinator_id])

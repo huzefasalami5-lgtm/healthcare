@@ -43,6 +43,7 @@ import {
   getLifeLinkPlansApi,
   activateDemoSubscriptionApi
 } from '../../services/curareachApi';
+import { HospitalDeceasedEnquiriesPanel } from '../lifelink/HospitalDeceasedEnquiriesPanel';
 
 
 interface HospitalDashboardProps {
@@ -806,6 +807,9 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
               </div>
             )}
           </div>
+
+          {/* Authorized Deceased Donation Enquiries Panel */}
+          <HospitalDeceasedEnquiriesPanel hospitalProfile={profile} />
 
           {/* Hospital Emergency Broadcast Requests Table */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
