@@ -88,7 +88,11 @@ def create_case(
         assigned_worker_id = req.assigned_worker_id
 
     # Generate unique case number
-    case_number = f"CR-2026-{random.randint(100, 999)}"
+    count = db.query(ClinicalCase).count() + 1
+    case_number = f"CR-2026-{count:04d}"
+    while db.query(ClinicalCase).filter(ClinicalCase.case_number == case_number).first():
+        count += 1
+        case_number = f"CR-2026-{count:04d}"
 
     case = ClinicalCase(
         case_number=case_number,

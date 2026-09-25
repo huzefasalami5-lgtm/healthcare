@@ -309,3 +309,124 @@ def test_treatment_transaction_and_financial_separation(client):
     # Treatment invoices have patient_id and item_description
     assert all(hasattr(t, "patient_id") and hasattr(t, "item_description") for t in treatment_invoices)
 
+# 13. COMMUNITY-WORKER ASSISTED REGISTRATION (Section 3B)
+def test_community_worker_assisted_registration(client):
+    worker_header = get_auth_header("worker@curareach.org", "COMMUNITY_WORKER")
+    unique_phone = f"+91-97400-{id(client) % 100000:05d}"
+    res = client.post("/api/v1/community/register-patient", json={
+        "full_name": "Basavaraj Gowda",
+        "phone": unique_phone,
+        "address": "Holenarasipura Cross, Bhadravathi",
+        "district": "Shivamogga",
+        "transport_access_barrier": True,
+        "financial_barrier": True,
+        "date_of_birth": "1968-11-20",
+        "gender": "Male",
+        "blood_group": "A+",
+        "emergency_contact_name": "Kumar Gowda (Son)",
+        "emergency_contact_phone": "+91-94480-11223",
+        "emergency_contact_relation": "Son",
+        "abha_id": "91-2026-9988-7766"
+    }, headers=worker_header)
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data["patient_identifier"].startswith("CR-PAT-2026-")
+    assert data["full_name"] == "Basavaraj Gowda"
+
+# 14. CARE INTELLIGENCE FACILITY MATCHING (Section 7 Agent 2)
+def test_care_intelligence_facility_matching(client):
+    doc_header = get_auth_header("doctor@curareach.org", "CLINICIAN")
+    db = SessionLocal()
+    from app.models.case import ClinicalCase
+    case1 = db.query(ClinicalCase).filter(ClinicalCase.case_number == "CR-2026-001").first()
+    db.close()
+    
+    res = client.get(f"/api/v1/facilities/match/{case1.id}", headers=doc_header)
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert "matches" in data
+    matches = data["matches"]
+    assert len(matches) >= 1
+    # Check match structure includes hospital name, capability score, match reasons
+    first = matches[0]
+    assert "hospital_name" in first
+    assert "capability_score" in first
+    assert "facility_type" in first
+
+# 15. CARE RESCUE FOLLOW-UP AND CLINICIAN CASE CLOSURE (Section 7 Agent 4 & Section 8 Step 13)
+def test_care_rescue_followup_and_closure(client):
+    doc_header = get_auth_header("doctor@curareach.org", "CLINICIAN")
+    worker_header = get_auth_header("worker@curareach.org", "COMMUNITY_WORKER")
+    
+    # 1. Fetch worker tasks
+    tasks_res = client.get("/api/v1/followup/tasks", headers=worker_header)
+    assert tasks_res.status_code == 200, tasks_res.text
+    tasks = tasks_res.json()
+    assert len(tasks) >= 1
+    task_id = tasks[0]["id"]
+    
+    # 2. Worker completes follow-up task
+    comp_res = client.post(f"/api/v1/followup/tasks/{task_id}/complete", json={
+        "worker_notes": "Home visit verified medication compliance and symptom remission.",
+        "barrier_reported": None
+    }, headers=worker_header)
+    assert comp_res.status_code == 200, comp_res.text
+    assert "completed" in comp_res.json()["message"].lower()
+    
+    # 3. Clinician performs documented case closure
+    c_res = client.post("/api/v1/cases/", json={
+        "primary_complaint": "Resolved mild viral pharyngitis",
+        "health_data_consent": True,
+        "referral_consent": True
+    }, headers=doc_header)
+    target_case_id = c_res.json()["id"]
+    client.post(f"/api/v1/intake/{target_case_id}/submit", json={
+        "main_complaint": "Throat tickle, now resolved",
+        "description": "Symptoms cleared with warm water gargling",
+        "onset_duration": "3 days",
+        "reported_severity": 2
+    }, headers=doc_header)
+    client.post(f"/api/v1/triage/{target_case_id}/clinician-review", json={
+        "action": "CONFIRM_URGENCY",
+        "confirmed_urgency": "LOW",
+        "clinical_notes": "Symptom remission noted. Routine closure indicated."
+    }, headers=doc_header)
+    
+    close_res = client.post(f"/api/v1/cases/{target_case_id}/close", json={
+        "closure_reason": "End-to-end clinical loop completed. Follow-up documented and patient stable."
+    }, headers=doc_header)
+    assert close_res.status_code == 200, close_res.text
+    assert close_res.json()["case"]["current_state"] == "CLOSED"
+
+# 16. AUDIT TRAIL LOGGING (Section 11)
+def test_audit_trail_logging(client):
+    admin_header = get_auth_header("admin@curareach.org", "CURAREACH_ADMIN")
+    res = client.get("/api/v1/admin/audit-logs", headers=admin_header)
+    assert res.status_code == 200, res.text
+    logs = res.json()
+    assert len(logs) >= 1
+    # Verify audit actions are captured without logging sensitive credentials
+    assert any("action" in log for log in logs)
+    assert not any("password" in str(log).lower() for log in logs)
+
+# 17. PERSISTENT STORAGE ACROSS DATABASE RE-CONNECT (Section 2)
+def test_persistent_storage_across_reconnect(client):
+    # Verify records remain intact in SQLite after separate session instances
+    db = SessionLocal()
+    from app.models.user import PatientProfile
+    from app.models.medical_history import PatientCondition
+    from app.models.medical_records import MedicalRecord
+    from app.models.treatment_billing import PatientTreatmentTransaction
+    
+    pat_count = db.query(PatientProfile).count()
+    cond_count = db.query(PatientCondition).count()
+    rec_count = db.query(MedicalRecord).count()
+    txn_count = db.query(PatientTreatmentTransaction).count()
+    db.close()
+    
+    assert pat_count >= 1
+    assert cond_count >= 1
+    assert rec_count >= 1
+    assert txn_count >= 1
+
+

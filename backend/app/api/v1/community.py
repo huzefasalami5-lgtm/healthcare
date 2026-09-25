@@ -51,13 +51,13 @@ def get_assigned_patients(
         patient_cases = [c for c in cases if c.patient_id == p.id]
         result.append({
             "patient_id": p.id,
-            "patient_identifier": p.patient_identifier or f"CR-PAT-2026-{p.id[:4].upper()}",
+            "patient_identifier": prof.patient_identifier if (prof and prof.patient_identifier) else f"CR-PAT-2026-{p.id[:4].upper()}",
             "full_name": p.full_name,
             "phone": p.phone,
-            "blood_group": p.blood_group,
-            "abha_id": p.abha_id,
-            "emergency_contact_name": p.emergency_contact_name,
-            "emergency_contact_phone": p.emergency_contact_phone,
+            "blood_group": prof.blood_group if prof else "O+",
+            "abha_id": prof.abha_id if prof else "",
+            "emergency_contact_name": prof.emergency_contact_name if prof else "",
+            "emergency_contact_phone": prof.emergency_contact_phone if prof else "",
             "address": prof.address if prof else None,
             "district": prof.district if prof else "Shivamogga",
             "transport_barrier": prof.transport_access_barrier if prof else False,
@@ -79,15 +79,16 @@ def assisted_patient_registration(
     
     existing = db.query(User).filter(User.email == clean_email).first()
     if existing:
+        prof = existing.patient_profile
         return {
             "message": "Patient already registered. Ready for assisted intake.",
             "patient_id": existing.id,
-            "patient_identifier": existing.patient_identifier,
+            "patient_identifier": prof.patient_identifier if (prof and prof.patient_identifier) else f"CR-PAT-2026-{existing.id[:4]}",
             "full_name": existing.full_name
         }
 
     # Generate unique formatted patient identifier
-    count = db.query(User).filter(User.role == Role.PATIENT).count()
+    count = db.query(PatientProfile).count()
     patient_identifier = f"CR-PAT-2026-{(count + 1):04d}"
 
     patient_user = User(
@@ -95,13 +96,7 @@ def assisted_patient_registration(
         hashed_password=get_password_hash("patient123"),
         full_name=req.full_name,
         phone=req.phone,
-        role=Role.PATIENT,
-        patient_identifier=patient_identifier,
-        blood_group=req.blood_group,
-        emergency_contact_name=req.emergency_contact_name,
-        emergency_contact_phone=req.emergency_contact_phone,
-        emergency_contact_relation=req.emergency_contact_relation,
-        abha_id=req.abha_id
+        role=Role.PATIENT
     )
     db.add(patient_user)
     db.commit()
@@ -109,13 +104,19 @@ def assisted_patient_registration(
 
     profile = PatientProfile(
         user_id=patient_user.id,
+        patient_identifier=patient_identifier,
         date_of_birth=req.date_of_birth,
         gender=req.gender,
+        blood_group=req.blood_group or "O+",
         address=req.address,
         district=req.district,
-        primary_language=req.primary_language,
+        emergency_contact_name=req.emergency_contact_name,
+        emergency_contact_phone=req.emergency_contact_phone,
+        emergency_contact_relation=req.emergency_contact_relation or "Family Member",
+        primary_language=req.primary_language or "English",
         transport_access_barrier=req.transport_access_barrier,
-        financial_barrier=req.financial_barrier
+        financial_barrier=req.financial_barrier,
+        abha_id=req.abha_id
     )
     db.add(profile)
     db.commit()
@@ -123,7 +124,7 @@ def assisted_patient_registration(
     return {
         "message": "Patient successfully registered under assisted care pathway.",
         "patient_id": patient_user.id,
-        "patient_identifier": patient_user.patient_identifier,
+        "patient_identifier": patient_identifier,
         "full_name": patient_user.full_name,
         "email": patient_user.email
     }
