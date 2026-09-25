@@ -195,3 +195,49 @@ def test_public_network_insights(client):
     assert "volunteer_blood_donors" in data
     assert "city_distribution" in data
     assert len(data["city_distribution"]) > 0
+
+def test_donor_isolation_from_patients_and_registration_data_sync(client):
+    """Verifies that donor role switcher is isolated from patients and new donor registration stores & syncs data"""
+    # 1. Verify switch-demo-role for DONOR yields pure DONOR user, NOT a patient
+    res_switch = client.post("/api/v1/auth/switch-demo-role", json={"target_role": "DONOR"})
+    assert res_switch.status_code == 200
+    user_data = res_switch.json()["user"]
+    assert user_data["role"] == "DONOR"
+    assert user_data["patient_identifier"] is None
+    assert "patient" not in user_data["email"].lower()
+
+    # 2. Register a brand new distinct donor with specific profile fields
+    res_reg = client.post("/api/v1/lifelink/donors/register", json={
+        "full_name": "Meenakshi Sundaram",
+        "email": "meenakshi.donor@example.com",
+        "phone": "+91-98765-11223",
+        "date_of_birth": "1993-04-15",
+        "city": "Bhadravathi",
+        "district": "Shivamogga",
+        "self_reported_blood_group": "AB+",
+        "donation_categories": ["BLOOD", "PLATELETS"],
+        "willing_to_travel": True,
+        "opt_in_notifications": True
+    })
+    assert res_reg.status_code == 200
+    reg_data = res_reg.json()
+    assert reg_data["status"] == "success"
+    assert "access_token" in reg_data
+    token = reg_data["access_token"]
+    assert reg_data["user"]["full_name"] == "Meenakshi Sundaram"
+    assert reg_data["user"]["role"] == "DONOR"
+
+    # 3. Query /donors/me with this new token to verify stored data and perfect sync
+    headers = {"Authorization": f"Bearer {token}"}
+    res_me = client.get("/api/v1/lifelink/donors/me", headers=headers)
+    assert res_me.status_code == 200
+    me_data = res_me.json()
+    assert me_data["full_name"] == "Meenakshi Sundaram"
+    assert me_data["city"] == "Bhadravathi"
+    assert me_data["district"] == "Shivamogga"
+    
+    # Verify blood group and preferences are stored accurately
+    blood_pref = next((p for p in me_data["preferences"] if p["category"] == "BLOOD"), None)
+    assert blood_pref is not None
+    assert blood_pref["blood_group"] == "AB+"
+    assert blood_pref["willing_to_travel"] is True

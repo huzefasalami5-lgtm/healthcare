@@ -38,9 +38,10 @@ import { FamilyEnquiriesPanel } from '../lifelink/FamilyEnquiriesPanel';
 interface DonorDashboardProps {
   currentUser?: any;
   onRefresh?: () => void;
+  onUserChange?: (user: any) => void;
 }
 
-export const DonorDashboard: React.FC<DonorDashboardProps> = ({ currentUser, onRefresh }) => {
+export const DonorDashboard: React.FC<DonorDashboardProps> = ({ currentUser, onRefresh, onUserChange }) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'interests' | 'availability' | 'requests' | 'activity' | 'privacy' | 'official' | 'enquiries'>('requests');
   const [isRegModalOpen, setIsRegModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -66,7 +67,7 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({ currentUser, onR
 
   useEffect(() => {
     loadDonorData();
-  }, []);
+  }, [currentUser]);
 
   const loadDonorData = async () => {
     try {
@@ -760,12 +761,20 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({ currentUser, onR
       <LifeLinkRegistrationModal
         isOpen={isRegModalOpen}
         onClose={() => setIsRegModalOpen(false)}
-        onRegisteredSuccess={(ref, type) => {
+        onRegisteredSuccess={async (ref, type, newUser) => {
           setIsRegModalOpen(false);
-          loadDonorData();
+          if (newUser && onUserChange) {
+            onUserChange(newUser);
+          }
+          await loadDonorData();
           if (type === 'DECEASED_ENQUIRY') {
             setActiveTab('enquiries');
+            setSuccessMsg(`Compassionate enquiry submitted (${ref}). Coordinator notified.`);
+          } else {
+            setActiveTab('profile');
+            setSuccessMsg(`Voluntary donor registration complete (${ref}). Profile synchronized.`);
           }
+          setTimeout(() => setSuccessMsg(null), 5000);
         }}
       />
     </div>

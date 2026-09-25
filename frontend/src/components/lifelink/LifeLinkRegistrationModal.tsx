@@ -25,7 +25,7 @@ import {
 interface LifeLinkRegistrationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onRegisteredSuccess?: (reference: string, type: 'DONOR' | 'DECEASED_ENQUIRY') => void;
+  onRegisteredSuccess?: (reference: string, type: 'DONOR' | 'DECEASED_ENQUIRY', user?: any) => void;
 }
 
 export const LifeLinkRegistrationModal: React.FC<LifeLinkRegistrationModalProps> = ({
@@ -45,6 +45,8 @@ export const LifeLinkRegistrationModal: React.FC<LifeLinkRegistrationModalProps>
 
   // --- Option A Form State (Voluntary Living Donor) ---
   const [optAName, setOptAName] = useState('');
+  const [optAEmail, setOptAEmail] = useState('');
+  const [optAPhone, setOptAPhone] = useState('');
   const [optADob, setOptADob] = useState('1994-05-18');
   const [optACity, setOptACity] = useState('Shivamogga');
   const [optADistrict, setOptADistrict] = useState('Shivamogga');
@@ -92,6 +94,8 @@ export const LifeLinkRegistrationModal: React.FC<LifeLinkRegistrationModalProps>
     try {
       const res = await registerDonorApi({
         full_name: optAName.trim(),
+        email: optAEmail.trim() || undefined,
+        phone: optAPhone.trim() || undefined,
         date_of_birth: optADob,
         city: optACity,
         district: optADistrict,
@@ -107,7 +111,7 @@ export const LifeLinkRegistrationModal: React.FC<LifeLinkRegistrationModalProps>
         details: res
       });
       setSelectedOption('CONFIRMATION');
-      if (onRegisteredSuccess) onRegisteredSuccess(res.donor_reference, 'DONOR');
+      if (onRegisteredSuccess) onRegisteredSuccess(res.donor_reference, 'DONOR', res.user);
     } catch (err: any) {
       setErrorMessage(err.message || 'Registration failed. Please check connection.');
     } finally {
@@ -389,6 +393,34 @@ export const LifeLinkRegistrationModal: React.FC<LifeLinkRegistrationModalProps>
                     required
                     value={optADob}
                     onChange={(e) => setOptADob(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Email Address <span className="text-slate-400 font-normal">(for login &amp; data sync)</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={optAEmail}
+                    onChange={(e) => setOptAEmail(e.target.value)}
+                    placeholder="e.g. donor.meenakshi@example.com"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Phone Number <span className="text-slate-400 font-normal">(for verified hospital alerts)</span>
+                  </label>
+                  <input
+                    type="tel"
+                    value={optAPhone}
+                    onChange={(e) => setOptAPhone(e.target.value)}
+                    placeholder="e.g. +91-98450-12345"
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500"
                   />
                 </div>

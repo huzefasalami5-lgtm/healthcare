@@ -170,6 +170,10 @@ export const App: React.FC = () => {
               <DonorDashboard
                 currentUser={currentUser!}
                 onRefresh={handleRefreshData}
+                onUserChange={(newUser) => {
+                  setCurrentUser(newUser);
+                  setActiveRole(newUser.role || 'DONOR');
+                }}
               />
             )}
           </>

@@ -20,13 +20,15 @@ import {
 } from '../../services/curareachApi';
 
 interface LifeLinkRegistrationPageProps {
-  onBackToDashboard?: () => void;
+  onBackToDashboard: () => void;
   onEnquirySubmitted?: (ref: string) => void;
+  onDonorRegistered?: (user: any, ref: string) => void;
 }
 
 export const LifeLinkRegistrationPage: React.FC<LifeLinkRegistrationPageProps> = ({
   onBackToDashboard,
-  onEnquirySubmitted
+  onEnquirySubmitted,
+  onDonorRegistered
 }) => {
   const [selectedOption, setSelectedOption] = useState<'CHOICE' | 'OPTION_A' | 'OPTION_B' | 'CONFIRMATION'>('CHOICE');
   const [submitting, setSubmitting] = useState(false);
@@ -40,6 +42,8 @@ export const LifeLinkRegistrationPage: React.FC<LifeLinkRegistrationPageProps> =
 
   // --- Option A Form State (Voluntary Living Donor) ---
   const [optAName, setOptAName] = useState('');
+  const [optAEmail, setOptAEmail] = useState('');
+  const [optAPhone, setOptAPhone] = useState('');
   const [optADob, setOptADob] = useState('1994-05-18');
   const [optACity, setOptACity] = useState('Shivamogga');
   const [optADistrict, setOptADistrict] = useState('Shivamogga');
@@ -85,6 +89,8 @@ export const LifeLinkRegistrationPage: React.FC<LifeLinkRegistrationPageProps> =
     try {
       const res = await registerDonorApi({
         full_name: optAName.trim(),
+        email: optAEmail.trim() || undefined,
+        phone: optAPhone.trim() || undefined,
         date_of_birth: optADob,
         city: optACity,
         district: optADistrict,
@@ -100,6 +106,7 @@ export const LifeLinkRegistrationPage: React.FC<LifeLinkRegistrationPageProps> =
         details: res
       });
       setSelectedOption('CONFIRMATION');
+      if (onDonorRegistered) onDonorRegistered(res.user, res.donor_reference);
     } catch (err: any) {
       setErrorMessage(err.message || 'Registration failed. Please check connection.');
     } finally {
@@ -374,6 +381,34 @@ export const LifeLinkRegistrationPage: React.FC<LifeLinkRegistrationPageProps> =
                   required
                   value={optADob}
                   onChange={(e) => setOptADob(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Email Address <span className="text-slate-400 font-normal">(for login &amp; data sync)</span>
+                </label>
+                <input
+                  type="email"
+                  value={optAEmail}
+                  onChange={(e) => setOptAEmail(e.target.value)}
+                  placeholder="e.g. donor.meenakshi@example.com"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Phone Number <span className="text-slate-400 font-normal">(for verified hospital alerts)</span>
+                </label>
+                <input
+                  type="tel"
+                  value={optAPhone}
+                  onChange={(e) => setOptAPhone(e.target.value)}
+                  placeholder="e.g. +91-98450-12345"
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500"
                 />
               </div>

@@ -317,7 +317,8 @@ def switch_demo_role(req: RoleSwitchRequest, db: Session = Depends(get_db)):
             Role.COMMUNITY_WORKER: "worker@curareach.org",
             Role.CLINICIAN: "doctor@curareach.org",
             Role.HOSPITAL_STAFF: "hospital@curareach.org",
-            Role.CURAREACH_ADMIN: "admin@curareach.org"
+            Role.CURAREACH_ADMIN: "admin@curareach.org",
+            Role.DONOR: "donor1@curareach.org"
         }
         target_email = role_map.get(req.target_role, "patient@curareach.org")
 

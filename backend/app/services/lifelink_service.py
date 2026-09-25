@@ -77,6 +77,84 @@ class LifeLinkService:
     ) -> DonorProfile:
         existing = db.query(DonorProfile).filter(DonorProfile.user_id == user_id).first()
         if existing:
+            # Update existing donor profile with the newly registered data
+            existing.date_of_birth = date_of_birth
+            existing.city = city
+            existing.district = district
+            existing.state = state
+            existing.preferred_language = preferred_language
+            existing.preferred_contact_method = preferred_contact_method
+            existing.account_status = DonorStatus.ACTIVE
+
+            # Update or create donation preferences
+            cats = donation_categories or [DonationCategory.BLOOD]
+            blood_pref = db.query(DonationPreference).filter(
+                DonationPreference.donor_id == existing.id,
+                DonationPreference.donation_category == DonationCategory.BLOOD
+            ).first()
+            if blood_pref:
+                blood_pref.self_reported_blood_group = blood_group or blood_pref.self_reported_blood_group
+                blood_pref.preferred_city = city
+                blood_pref.preferred_district = district
+                blood_pref.willing_to_travel = willing_to_travel
+                blood_pref.active = True
+            else:
+                db.add(DonationPreference(
+                    id=str(uuid.uuid4()),
+                    donor_id=existing.id,
+                    donation_category=DonationCategory.BLOOD,
+                    self_reported_blood_group=blood_group,
+                    preferred_city=city,
+                    preferred_district=district,
+                    willing_to_travel=willing_to_travel,
+                    active=True
+                ))
+
+            for cat in cats:
+                if cat != DonationCategory.BLOOD:
+                    c_pref = db.query(DonationPreference).filter(
+                        DonationPreference.donor_id == existing.id,
+                        DonationPreference.donation_category == cat
+                    ).first()
+                    if not c_pref:
+                        db.add(DonationPreference(
+                            id=str(uuid.uuid4()),
+                            donor_id=existing.id,
+                            donation_category=cat,
+                            preferred_city=city,
+                            preferred_district=district,
+                            willing_to_travel=willing_to_travel,
+                            active=True
+                        ))
+
+            avail = db.query(DonorAvailability).filter(DonorAvailability.donor_id == existing.id).first()
+            if avail:
+                avail.availability_status = "AVAILABLE"
+            else:
+                db.add(DonorAvailability(
+                    id=str(uuid.uuid4()),
+                    donor_id=existing.id,
+                    availability_status="AVAILABLE"
+                ))
+
+            notif_c = db.query(DonorConsent).filter(
+                DonorConsent.donor_id == existing.id,
+                DonorConsent.consent_type == "REQUEST_NOTIFICATIONS"
+            ).first()
+            if notif_c:
+                notif_c.granted = opt_in_notifications
+            else:
+                db.add(DonorConsent(
+                    id=str(uuid.uuid4()),
+                    donor_id=existing.id,
+                    consent_type="REQUEST_NOTIFICATIONS",
+                    consent_version="1.0",
+                    granted=opt_in_notifications,
+                    recorded_source="WEB_REGISTRATION"
+                ))
+
+            db.commit()
+            db.refresh(existing)
             return existing
 
         donor_count = db.query(DonorProfile).count() + 1

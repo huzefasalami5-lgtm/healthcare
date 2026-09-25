@@ -646,6 +646,8 @@ export async function processTreatmentRefundApi(transactionId: string, payload: 
 
 export async function registerDonorApi(payload: {
   full_name: string;
+  email?: string;
+  phone?: string;
   date_of_birth: string;
   city: string;
   district: string;
@@ -657,10 +659,14 @@ export async function registerDonorApi(payload: {
   willing_to_travel?: boolean;
   opt_in_notifications?: boolean;
 }): Promise<any> {
-  return request('/lifelink/donors/register', {
+  const res = await request<any>('/lifelink/donors/register', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
+  if (res && res.access_token) {
+    setStoredToken(res.access_token);
+  }
+  return res;
 }
 
 export async function getDonorProfileApi(): Promise<any> {

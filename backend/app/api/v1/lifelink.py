@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import oauth2_scheme, decode_access_token, Role
+from app.core.security import oauth2_scheme, decode_access_token, create_access_token, get_password_hash, Role
 from app.models.user import User
 from app.models.hospital import Hospital
 from app.models.lifelink import (
@@ -28,10 +28,20 @@ router = APIRouter(prefix="/lifelink", tags=["LifeLink - Donor Connect"])
 # --- Helper Dependency for Current User ---
 def get_current_user(token: Optional[str] = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
     if not token:
-        # Fallback to demo donor user for smooth interactive demo
+        # Fallback strictly to demo donor user - NEVER fallback to patient!
         user = db.query(User).filter(User.role == Role.DONOR).first()
         if not user:
-            user = db.query(User).filter(User.role == Role.PATIENT).first() or db.query(User).first()
+            user = User(
+                id="user-donor-fallback",
+                email="donor1@curareach.org",
+                hashed_password=get_password_hash("donor123"),
+                full_name="Rahul Verma",
+                role=Role.DONOR,
+                phone="+91-98450-77101"
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
         return user
     payload = decode_access_token(token)
     user_id = payload.get("sub")
@@ -44,6 +54,8 @@ def get_current_user(token: Optional[str] = Depends(oauth2_scheme), db: Session 
 # --- Pydantic Schemas ---
 class DonorRegisterRequest(BaseModel):
     full_name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
     date_of_birth: str = "1995-05-14"
     city: str = "Shivamogga"
     district: str = "Shivamogga"
@@ -121,10 +133,46 @@ def register_donor(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Enroll as a voluntary donor (Free registration)"""
+    """Enroll as a voluntary donor (Free registration, strictly isolated from patient profiles)"""
+    # Strict separation safeguard:
+    # If current user is a patient or if a new volunteer registers with a distinct identity,
+    # create or switch to a dedicated User with Role.DONOR.
+    target_user = user
+    if user.role != Role.DONOR or user.patient_profile is not None or (user.full_name != req.full_name and user.email == "donor1@curareach.org") or (req.email and req.email != user.email):
+        random_suffix = uuid.uuid4().hex[:6]
+        donor_email = req.email or f"donor.{random_suffix}@curareach.org"
+        donor_user = db.query(User).filter(User.email == donor_email).first()
+        if not donor_user:
+            donor_user = User(
+                id=str(uuid.uuid4()),
+                email=donor_email,
+                hashed_password=get_password_hash("Donor@123"),
+                full_name=req.full_name,
+                phone=req.phone or "+91-98450-77199",
+                role=Role.DONOR
+            )
+            db.add(donor_user)
+            db.commit()
+            db.refresh(donor_user)
+        else:
+            donor_user.full_name = req.full_name
+            donor_user.role = Role.DONOR
+            if req.phone:
+                donor_user.phone = req.phone
+            db.commit()
+            db.refresh(donor_user)
+        target_user = donor_user
+    else:
+        target_user.full_name = req.full_name
+        target_user.role = Role.DONOR
+        if req.phone:
+            target_user.phone = req.phone
+        db.commit()
+        db.refresh(target_user)
+
     donor = LifeLinkService.register_donor(
         db,
-        user_id=user.id,
+        user_id=target_user.id,
         full_name=req.full_name,
         date_of_birth=req.date_of_birth,
         city=req.city,
@@ -137,11 +185,22 @@ def register_donor(
         willing_to_travel=req.willing_to_travel,
         opt_in_notifications=req.opt_in_notifications
     )
+
+    new_token = create_access_token(data={"sub": target_user.id, "role": Role.DONOR, "email": target_user.email})
+
     return {
         "status": "success",
         "message": "Voluntary donor registration successful",
         "donor_reference": donor.donor_reference,
-        "donor_id": donor.id
+        "donor_id": donor.id,
+        "access_token": new_token,
+        "user": {
+            "id": target_user.id,
+            "email": target_user.email,
+            "full_name": target_user.full_name,
+            "role": Role.DONOR,
+            "phone": target_user.phone
+        }
     }
 
 @router.get("/donors/me")
@@ -149,14 +208,19 @@ def get_donor_me(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get active donor profile and preferences"""
-    donor = LifeLinkService.get_donor_by_user_id(db, user.id)
+    """Get active donor profile and preferences (strictly isolated from patient profiles)"""
+    target_user = user
+    if target_user.role != Role.DONOR:
+        demo_donor = db.query(User).filter(User.role == Role.DONOR).first()
+        if demo_donor:
+            target_user = demo_donor
+
+    donor = LifeLinkService.get_donor_by_user_id(db, target_user.id)
     if not donor:
-        # Auto-create or seed if demo user
         donor = LifeLinkService.register_donor(
-            db, user_id=user.id, full_name=user.full_name or "Demo Volunteer Donor",
-            date_of_birth="1995-08-20", city="Shivamogga", district="Shivamogga",
-            blood_group="O+", donation_categories=["BLOOD"]
+            db, user_id=target_user.id, full_name=target_user.full_name or "Rahul Verma",
+            date_of_birth="1994-03-12", city="Shivamogga", district="Shivamogga",
+            blood_group="O-", donation_categories=["BLOOD"]
         )
 
     prefs = db.query(DonationPreference).filter(DonationPreference.donor_id == donor.id).all()
@@ -166,7 +230,7 @@ def get_donor_me(
     return {
         "id": donor.id,
         "donor_reference": donor.donor_reference,
-        "full_name": user.full_name,
+        "full_name": target_user.full_name,
         "city": donor.city,
         "district": donor.district,
         "state": donor.state,
