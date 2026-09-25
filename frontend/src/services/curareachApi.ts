@@ -640,3 +640,127 @@ export async function processTreatmentRefundApi(transactionId: string, payload: 
   });
 }
 
+// ====================================================================
+// LIFELINK — DONOR CONNECT API CLIENT
+// ====================================================================
+
+export async function registerDonorApi(payload: {
+  full_name: string;
+  date_of_birth: string;
+  city: string;
+  district: string;
+  state?: string;
+  preferred_language?: string;
+  preferred_contact_method?: string;
+  self_reported_blood_group?: string;
+  donation_categories?: string[];
+  willing_to_travel?: boolean;
+  opt_in_notifications?: boolean;
+}): Promise<any> {
+  return request('/lifelink/donors/register', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getDonorProfileApi(): Promise<any> {
+  return request('/lifelink/donors/me');
+}
+
+export async function updateDonorPreferencesApi(payload: {
+  self_reported_blood_group?: string;
+  donation_categories?: string[];
+  living_organ_interest?: string;
+  tissue_interest?: string;
+  willing_to_travel?: boolean;
+}): Promise<any> {
+  return request('/lifelink/donors/me/preferences', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateDonorAvailabilityApi(availability_status: string): Promise<any> {
+  return request('/lifelink/donors/me/availability', {
+    method: 'PUT',
+    body: JSON.stringify({ availability_status }),
+  });
+}
+
+export async function updateDonorConsentApi(consent_type: string, granted: boolean): Promise<any> {
+  return request('/lifelink/donors/me/consents', {
+    method: 'POST',
+    body: JSON.stringify({ consent_type, granted }),
+  });
+}
+
+export async function getDonorInvitationsApi(): Promise<any[]> {
+  return request<any[]>('/lifelink/donors/me/invitations');
+}
+
+export async function respondToInvitationApi(invitationId: string, response: string, contactSharingApproved: boolean): Promise<any> {
+  return request(`/lifelink/invitations/${invitationId}/respond`, {
+    method: 'POST',
+    body: JSON.stringify({ response, contact_sharing_approved: contactSharingApproved }),
+  });
+}
+
+export async function getDonorActivityApi(): Promise<any> {
+  return request('/lifelink/donors/me/activity');
+}
+
+export async function recordEducationalPledgeApi(category: string, officialReference?: string): Promise<any> {
+  return request('/lifelink/donors/pledge', {
+    method: 'POST',
+    body: JSON.stringify({ category, official_reference: officialReference }),
+  });
+}
+
+export async function createHospitalDonorRequestApi(payload: {
+  hospital_id: string;
+  donation_category?: string;
+  requested_blood_group?: string;
+  units_needed?: number;
+  city?: string;
+  district?: string;
+  requested_until_hours?: number;
+  description?: string;
+}): Promise<any> {
+  return request('/lifelink/hospitals/requests', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getHospitalDonorRequestsApi(hospitalId?: string): Promise<any[]> {
+  const q = hospitalId ? `?hospital_id=${encodeURIComponent(hospitalId)}` : '';
+  return request<any[]>(`/lifelink/hospitals/requests${q}`);
+}
+
+export async function getAuthorizedIntroductionsApi(hospitalId?: string): Promise<any[]> {
+  const q = hospitalId ? `?hospital_id=${encodeURIComponent(hospitalId)}` : '';
+  return request<any[]>(`/lifelink/hospitals/introductions${q}`);
+}
+
+export async function closeHospitalDonorRequestApi(requestId: string): Promise<any> {
+  return request(`/lifelink/hospitals/requests/${requestId}/close`, {
+    method: 'POST',
+  });
+}
+
+export async function getLifeLinkPlansApi(): Promise<any[]> {
+  return request<any[]>('/lifelink/plans');
+}
+
+export async function activateDemoSubscriptionApi(hospitalId: string, planCode: string): Promise<any> {
+  return request('/lifelink/hospitals/subscription/demo-activate', {
+    method: 'POST',
+    body: JSON.stringify({ hospital_id: hospitalId, plan_code: planCode }),
+  });
+}
+
+export async function getPublicNetworkInsightsApi(): Promise<any> {
+  return request('/lifelink/insights');
+}
+
+

@@ -13,7 +13,9 @@ import {
   TrendingUp, 
   Users,
   RotateCw,
-  X
+  X,
+  Heart,
+  Droplet
 } from 'lucide-react';
 import { UserProfile, CaseSummary } from '../../types/curareach';
 import { 
@@ -23,7 +25,9 @@ import {
   fetchSubscriptions, 
   fetchInvoices, 
   fetchAgentExecutions, 
-  fetchAuditLogs 
+  fetchAuditLogs,
+  getPublicNetworkInsightsApi,
+  getLifeLinkPlansApi
 } from '../../services/curareachApi';
 
 interface AdminDashboardProps {
@@ -43,7 +47,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [invoices, setInvoices] = useState<any[]>([]);
   const [agentExecutions, setAgentExecutions] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'HOSPITALS' | 'BILLING' | 'AGENTS' | 'AUDIT'>('OVERVIEW');
+  const [lifelinkInsights, setLifelinkInsights] = useState<any>(null);
+  const [lifelinkPlans, setLifelinkPlans] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'HOSPITALS' | 'BILLING' | 'AGENTS' | 'AUDIT' | 'LIFELINK'>('OVERVIEW');
   const [isLoading, setIsLoading] = useState(true);
 
   // Verification Modal
@@ -53,13 +59,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const loadAdminData = async () => {
     setIsLoading(true);
     try {
-      const [m, h, s, inv, execs, logs] = await Promise.all([
+      const [m, h, s, inv, execs, logs, lInsights, lPlans] = await Promise.all([
         fetchAdminMetrics(),
         fetchAdminHospitals(),
         fetchSubscriptions(),
         fetchInvoices(),
         fetchAgentExecutions(),
-        fetchAuditLogs()
+        fetchAuditLogs(),
+        getPublicNetworkInsightsApi().catch(() => null),
+        getLifeLinkPlansApi().catch(() => [])
       ]);
       setMetrics(m);
       setHospitals(h);
@@ -67,6 +75,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setInvoices(inv);
       setAgentExecutions(execs);
       setAuditLogs(logs);
+      setLifelinkInsights(lInsights);
+      setLifelinkPlans(lPlans);
     } catch (err: any) {
       console.error('Failed to load admin data:', err);
     } finally {
@@ -165,6 +175,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {[
           { key: 'OVERVIEW', label: 'Platform Summary' },
           { key: 'HOSPITALS', label: 'Hospital Verification (Scenario F)' },
+          { key: 'LIFELINK', label: 'LifeLink Donors & Subscriptions' },
           { key: 'BILLING', label: 'Subscriptions & Demo Billing' },
           { key: 'AGENTS', label: 'Agent Execution Stream' },
           { key: 'AUDIT', label: 'Security & State Audit Logs' }
@@ -386,6 +397,89 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 6: LifeLink Donors & SaaS Subscriptions */}
+      {activeTab === 'LIFELINK' && (
+        <div className="space-y-6 text-xs">
+          {/* Statutory Compliance Banner */}
+          <div className="bg-rose-950/20 border border-rose-900/40 rounded-2xl p-5 space-y-2">
+            <div className="flex items-center gap-2 text-rose-300 font-bold text-sm">
+              <Shield className="w-5 h-5 text-rose-400" />
+              <span>National Healthcare Compliance: CuraReach LifeLink Governance</span>
+            </div>
+            <p className="text-slate-300 text-xs leading-relaxed">
+              Operating under the Transplantation of Human Organs and Tissues Act (THOTA 1994, amended 2011) and the National Blood Transfusion Council regulations. Voluntary donations are strictly non-commercial and altruistic. Contact details are never exposed without explicit donor verification and consent.
+            </p>
+          </div>
+
+          {/* Network Metrics Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+              <span className="text-slate-400 block text-[11px]">Voluntary Blood Donors</span>
+              <span className="text-2xl font-black text-rose-400 mt-1 block">
+                {lifelinkInsights?.voluntary_blood_donors_registered ?? 8}
+              </span>
+              <span className="text-[10px] text-emerald-400">100% Consent Verified</span>
+            </div>
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+              <span className="text-slate-400 block text-[11px]">Hospital Broadcasts</span>
+              <span className="text-2xl font-black text-cyan-400 mt-1 block">
+                {lifelinkInsights?.hospital_broadcast_requests ?? 1}
+              </span>
+              <span className="text-[10px] text-slate-500">Live district matching</span>
+            </div>
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+              <span className="text-slate-400 block text-[11px]">Authorized Introductions</span>
+              <span className="text-2xl font-black text-emerald-400 mt-1 block">
+                {lifelinkInsights?.authorized_introductions ?? 1}
+              </span>
+              <span className="text-[10px] text-slate-500">Explicit consent granted</span>
+            </div>
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+              <span className="text-slate-400 block text-[11px]">NOTTO Referrals</span>
+              <span className="text-2xl font-black text-indigo-400 mt-1 block">
+                {lifelinkInsights?.educational_registry_referrals ?? 4}
+              </span>
+              <span className="text-[10px] text-slate-500">Official registry guidance</span>
+            </div>
+          </div>
+
+          {/* LifeLink B2B Software Subscription Tiers Table */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="font-bold text-white text-sm">LifeLink Institutional Software Subscription Tiers</h3>
+                <p className="text-xs text-slate-400">
+                  Voluntary B2B tooling licenses for multi-channel messaging and donor coordination.
+                </p>
+              </div>
+              <span className="px-3 py-1 rounded-lg text-xs font-mono font-bold bg-indigo-950 text-indigo-300 border border-indigo-800/40">
+                SaaS Revenue Model
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {lifelinkPlans.map((plan) => (
+                <div key={plan.id} className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <strong className="text-white text-sm">{plan.plan_name}</strong>
+                    <span className="font-mono text-xs text-indigo-400 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-900">
+                      {plan.plan_code}
+                    </span>
+                  </div>
+                  <div className="text-xl font-bold text-white">
+                    ₹{plan.monthly_fee_inr} <span className="text-xs text-slate-400 font-normal">/ mo</span>
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    Annual: ₹{plan.annual_fee_inr} / yr (Save 17%)
+                  </div>
+                  <p className="text-[11px] text-slate-300 pt-1 border-t border-slate-800/80">{plan.description}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

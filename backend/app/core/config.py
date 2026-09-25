@@ -25,12 +25,28 @@ class Settings(BaseModel):
     SECRET_KEY: str = os.getenv("SECRET_KEY", "curareach-360-super-secret-jwt-key-2026")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 hours for seamless judging & demo
+
+    # Supabase Cloud Configuration
+    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
+    SUPABASE_PUBLISHABLE_KEY: str = os.getenv("SUPABASE_PUBLISHABLE_KEY", os.getenv("VITE_SUPABASE_PUBLISHABLE_KEY", ""))
+    SUPABASE_SECRET_KEY: str = os.getenv("SUPABASE_SECRET_KEY", "")
+    ALLOWED_ORIGINS: list[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "https://*.vercel.app"
+    ]
     
-    # Database
+    # Database (Supabase PostgreSQL or Local SQLite)
     is_vercel: bool = bool(os.getenv("VERCEL"))
     
     @property
     def get_database_url(self) -> str:
+        raw_url = os.getenv("DATABASE_URL")
+        if raw_url:
+            if raw_url.startswith("postgres://"):
+                return raw_url.replace("postgres://", "postgresql://", 1)
+            return raw_url
         if self.is_vercel:
             import shutil
             tmp_db = "/tmp/curareach360.db"
@@ -41,12 +57,16 @@ class Settings(BaseModel):
                         shutil.copy2(base_db, tmp_db)
                     except Exception:
                         pass
-            return os.getenv("DATABASE_URL", f"sqlite:///{tmp_db}")
-        return os.getenv("DATABASE_URL", "sqlite:///./curareach360.db")
+            return f"sqlite:///{tmp_db}"
+        return "sqlite:///./curareach360.db"
 
-    DATABASE_URL: str = os.getenv("DATABASE_URL", (
-        "/tmp/curareach360.db" if os.getenv("VERCEL") else "sqlite:///./curareach360.db"
-    ) if not os.getenv("VERCEL") else f"sqlite:////tmp/curareach360.db")
+    DATABASE_URL: str = (
+        os.getenv("DATABASE_URL").replace("postgres://", "postgresql://", 1)
+        if os.getenv("DATABASE_URL") and os.getenv("DATABASE_URL").startswith("postgres://")
+        else (os.getenv("DATABASE_URL") or ("/tmp/curareach360.db" if os.getenv("VERCEL") else "sqlite:///./curareach360.db"))
+    )
+    if DATABASE_URL and not DATABASE_URL.startswith("sqlite") and not DATABASE_URL.startswith("postgresql"):
+        DATABASE_URL = f"sqlite:///{DATABASE_URL}"
     
     # Private Storage
     STORAGE_DIR: str = "/tmp/uploads/private" if os.getenv("VERCEL") else os.path.join(

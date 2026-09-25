@@ -9,7 +9,8 @@ export type UserRole =
   | 'COMMUNITY_WORKER' 
   | 'CLINICIAN' 
   | 'HOSPITAL_STAFF' 
-  | 'CURAREACH_ADMIN';
+  | 'CURAREACH_ADMIN'
+  | 'DONOR';
 
 export interface UserProfile {
   id: string;

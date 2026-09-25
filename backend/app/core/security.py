@@ -16,8 +16,12 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_PREFIX}/auth/login
 class Role:
     PATIENT = "PATIENT"
     COMMUNITY_WORKER = "COMMUNITY_WORKER"
+    AGENCY_ADMIN = "AGENCY_ADMIN"
     CLINICIAN = "CLINICIAN"
     HOSPITAL_STAFF = "HOSPITAL_STAFF"
+    HOSPITAL_ADMIN = "HOSPITAL_ADMIN"
+    DONOR = "DONOR"
+    PLATFORM_ADMIN = "PLATFORM_ADMIN"
     CURAREACH_ADMIN = "CURAREACH_ADMIN"
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:

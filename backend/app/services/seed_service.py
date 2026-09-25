@@ -32,6 +32,24 @@ from app.models.treatment_billing import (
     PaymentStatus,
     PaymentMethod,
 )
+from app.models.lifelink import (
+    DonorProfile,
+    DonorStatus,
+    DonationPreference,
+    DonationCategory,
+    DonorAvailability,
+    DonorConsent,
+    HospitalDonorRequest,
+    DonorRequestStatus,
+    DonorRequestInvitation,
+    InvitationStatus,
+    DonorResponse,
+    AuthorizedIntroduction,
+    IntroductionStatus,
+    LifeLinkSubscriptionPlan,
+    HospitalLifeLinkSubscription,
+    LifeLinkSubscriptionInvoice,
+)
 
 def seed_database(db: Session) -> None:
     # Ensure all tables exist
@@ -40,9 +58,11 @@ def seed_database(db: Session) -> None:
     # Check if already seeded
     if db.query(User).filter(User.email == "admin@curareach.org").first():
         seed_medical_and_financial_records(db)
+        seed_lifelink_records(db)
         return
 
     now = datetime.now(timezone.utc)
+
 
     # 1. SUBSCRIPTION PLANS
     p1 = SubscriptionPlan(
@@ -751,8 +771,10 @@ def seed_database(db: Session) -> None:
     db.commit()
 
     seed_medical_and_financial_records(db)
+    seed_lifelink_records(db)
 
     print("[SUCCESS] CuraReach 360 database seeded with users, hospitals, subscriptions, and demo Scenarios A-E.")
+
 
 def seed_medical_and_financial_records(db: Session) -> None:
     now = datetime.now(timezone.utc)
@@ -1044,3 +1066,208 @@ def seed_medical_and_financial_records(db: Session) -> None:
         db.commit()
 
     print("[SUCCESS] Patient medical histories, records, prescriptions, and simulated transactions initialized.")
+
+def seed_lifelink_records(db: Session) -> None:
+    """Seed synthetic voluntary donors, subscription plans, and hospital requests for LifeLink"""
+    if db.query(DonorProfile).first():
+        return
+
+    now = datetime.now(timezone.utc)
+    hashed_pwd = get_password_hash("Password123!")
+
+    # 1. LIFELINK SUBSCRIPTION PLANS
+    p_starter = LifeLinkSubscriptionPlan(
+        id="plan-ll-starter", code="STARTER", name="LifeLink Starter",
+        description="Hospital verification & basic voluntary blood donor broadcast coordination",
+        demo_price_inr=4999.00, billing_interval="MONTHLY",
+        feature_flags={"max_requests_per_month": 10, "staff_accounts": 2, "multi_branch": False}
+    )
+    p_pro = LifeLinkSubscriptionPlan(
+        id="plan-ll-pro", code="PROFESSIONAL", name="LifeLink Professional",
+        description="Advanced voluntary coordination, automated reminder queue & priority broadcast",
+        demo_price_inr=14999.00, billing_interval="MONTHLY",
+        feature_flags={"max_requests_per_month": 50, "staff_accounts": 10, "multi_branch": False}
+    )
+    p_ent = LifeLinkSubscriptionPlan(
+        id="plan-ll-ent", code="ENTERPRISE", name="LifeLink Network Enterprise",
+        description="Multi-facility hospital network coordination, aggregate reporting & dedicated support",
+        demo_price_inr=39999.00, billing_interval="MONTHLY",
+        feature_flags={"max_requests_per_month": -1, "staff_accounts": -1, "multi_branch": True}
+    )
+    db.add_all([p_starter, p_pro, p_ent])
+    db.commit()
+
+    # 2. SEED 8 SYNTHETIC VOLUNTEER DONORS
+    donors_data = [
+        ("donor1@curareach.org", "Rahul Verma", "O-", "Shivamogga", "Shivamogga", "+91-98450-77101", "1994-03-12"),
+        ("donor2@curareach.org", "Sneha Nair", "B+", "Bhadravathi", "Shivamogga", "+91-98450-77102", "1997-07-25"),
+        ("donor3@curareach.org", "Arjun Rao", "A+", "Shivamogga", "Shivamogga", "+91-98450-77103", "1991-11-05"),
+        ("donor4@curareach.org", "Meera Kulkarni", "AB+", "Kudligere", "Shivamogga", "+91-98450-77104", "1998-02-18"),
+        ("donor5@curareach.org", "Vikram Gowda", "O+", "Holalur", "Shivamogga", "+91-98450-77105", "1989-09-30"),
+        ("donor6@curareach.org", "Ananya Bhat", "A-", "Shivamogga", "Shivamogga", "+91-98450-77106", "1996-06-14"),
+        ("donor7@curareach.org", "Mohammed Farhan", "B-", "Bhadravathi", "Shivamogga", "+91-98450-77107", "1993-12-22"),
+        ("donor8@curareach.org", "Pooja Hegde", "O+", "Shivamogga", "Shivamogga", "+91-98450-77108", "1995-04-08"),
+    ]
+
+    donor_profiles = []
+    for idx, (email, name, bg, city, dist, phone, dob) in enumerate(donors_data):
+        u = db.query(User).filter(User.email == email).first()
+        if not u:
+            u = User(
+                id=f"user-donor-{idx+1}",
+                email=email,
+                hashed_password=hashed_pwd,
+                full_name=name,
+                role=Role.DONOR,
+                phone=phone
+            )
+            db.add(u)
+            db.flush()
+
+        d_prof = DonorProfile(
+            id=f"donor-prof-{idx+1}",
+            user_id=u.id,
+            donor_reference=f"CR-DON-2026-{1001 + idx}",
+            date_of_birth=dob,
+            city=city,
+            district=dist,
+            state="Karnataka",
+            preferred_language="English" if idx % 2 == 0 else "Kannada",
+            preferred_contact_method="Phone",
+            account_status=DonorStatus.ACTIVE
+        )
+        db.add(d_prof)
+        db.flush()
+
+        pref = DonationPreference(
+            id=f"pref-{idx+1}",
+            donor_id=d_prof.id,
+            donation_category=DonationCategory.BLOOD,
+            self_reported_blood_group=bg,
+            preferred_city=city,
+            preferred_district=dist,
+            willing_to_travel=True,
+            active=True
+        )
+        avail = DonorAvailability(
+            id=f"avail-{idx+1}",
+            donor_id=d_prof.id,
+            availability_status="AVAILABLE"
+        )
+        c_priv = DonorConsent(
+            id=f"consent-priv-{idx+1}",
+            donor_id=d_prof.id,
+            consent_type="PRIVACY_NOTICE",
+            consent_version="1.0",
+            granted=True
+        )
+        c_notif = DonorConsent(
+            id=f"consent-notif-{idx+1}",
+            donor_id=d_prof.id,
+            consent_type="REQUEST_NOTIFICATIONS",
+            consent_version="1.0",
+            granted=True
+        )
+        db.add_all([pref, avail, c_priv, c_notif])
+        donor_profiles.append(d_prof)
+
+    db.commit()
+
+    # 3. SEED ACTIVE HOSPITAL SUBSCRIPTION FOR SHIVAMOGGA DISTRICT HOSPITAL
+    hosp = db.query(Hospital).first()
+    if hosp:
+        hosp_sub = HospitalLifeLinkSubscription(
+            id="hosp-sub-shivamogga-1",
+            hospital_id=hosp.id,
+            plan_id=p_pro.id,
+            subscription_status="ACTIVE",
+            starts_at=now - timedelta(days=10),
+            ends_at=now + timedelta(days=355),
+            demo_mode=True
+        )
+        sub_inv = LifeLinkSubscriptionInvoice(
+            id="inv-sub-1",
+            subscription_id=hosp_sub.id,
+            invoice_reference="INV-LL-2026-SHV01",
+            amount_inr=14999.00,
+            invoice_status="PAID",
+            simulated=True
+        )
+        db.add_all([hosp_sub, sub_inv])
+
+        # 4. SEED SAMPLE BLOOD DONOR REQUEST FOR O- NEGATIVE
+        admin_u = db.query(User).filter(User.role == Role.HOSPITAL_STAFF).first() or db.query(User).first()
+        req_1 = HospitalDonorRequest(
+            id="req-donor-1001",
+            hospital_id=hosp.id,
+            created_by=admin_u.id,
+            internal_case_reference="CR-REQ-2026-1001",
+            donation_category=DonationCategory.BLOOD,
+            requested_blood_group="O-",
+            units_needed=2,
+            city="Shivamogga",
+            district="Shivamogga",
+            requested_from=now - timedelta(hours=6),
+            requested_until=now + timedelta(hours=42),
+            request_status=DonorRequestStatus.INTRODUCTION_AUTHORIZED,
+            request_description="Critical acute requirement: 2 units of O- Negative blood for postpartum hemorrhage emergency.",
+            expires_at=now + timedelta(hours=42)
+        )
+        db.add(req_1)
+        db.flush()
+
+        # Add consent first and flush
+        c_contact = DonorConsent(
+            id="consent-contact-donor-1",
+            donor_id=donor_o_neg.id,
+            consent_type="CONTACT_SHARING",
+            consent_version="1.0",
+            granted=True
+        )
+        db.add(c_contact)
+        db.flush()
+
+        inv_1 = DonorRequestInvitation(
+            id="inv-req-1001-donor-1",
+            request_id=req_1.id,
+            donor_id=donor_o_neg.id,
+            invitation_status=InvitationStatus.ACCEPTED,
+            sent_at=now - timedelta(hours=5),
+            responded_at=now - timedelta(hours=4),
+            expires_at=req_1.expires_at
+        )
+        db.add(inv_1)
+        db.flush()
+
+        resp_1 = DonorResponse(
+            id="resp-1001-1",
+            invitation_id=inv_1.id,
+            donor_id=donor_o_neg.id,
+            response="ACCEPT",
+            responded_at=now - timedelta(hours=4),
+            contact_sharing_approved=True
+        )
+        intro_1 = AuthorizedIntroduction(
+            id="intro-req-1001-donor-1",
+            request_id=req_1.id,
+            donor_id=donor_o_neg.id,
+            hospital_id=hosp.id,
+            consent_id=c_contact.id,
+            authorized_by=donor_o_neg.user_id,
+            permitted_contact_fields={
+                "donor_name": "Rahul Verma",
+                "phone": "+91-98450-77101",
+                "city": "Shivamogga",
+                "district": "Shivamogga",
+                "preferred_language": "English"
+            },
+            status=IntroductionStatus.AUTHORIZED,
+            authorized_at=now - timedelta(hours=4),
+            expires_at=req_1.expires_at
+        )
+        db.add_all([resp_1, intro_1])
+        db.commit()
+
+
+    print("[SUCCESS] CuraReach LifeLink seeded with 8 voluntary donors, plans, requests, and authorized introduction.")
+

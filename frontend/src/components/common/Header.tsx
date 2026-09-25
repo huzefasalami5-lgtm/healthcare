@@ -10,7 +10,8 @@ import {
   Zap, 
   CheckCircle2, 
   AlertTriangle,
-  ChevronDown
+  ChevronDown,
+  Heart
 } from 'lucide-react';
 import { UserProfile, UserRole } from '../../types/curareach';
 import { switchDemoRoleApi, resetDemoDatabaseApi } from '../../services/curareachApi';
@@ -63,7 +64,8 @@ export const Header: React.FC<HeaderProps> = ({
     { role: 'COMMUNITY_WORKER', label: 'Community Worker', icon: UserCheck, color: 'text-amber-400' },
     { role: 'CLINICIAN', label: 'Doctor / Coordinator', icon: Stethoscope, color: 'text-cyan-400' },
     { role: 'HOSPITAL_STAFF', label: 'Hospital Staff', icon: Building2, color: 'text-blue-400' },
-    { role: 'CURAREACH_ADMIN', label: 'CuraReach Admin', icon: Shield, color: 'text-purple-400' }
+    { role: 'CURAREACH_ADMIN', label: 'CuraReach Admin', icon: Shield, color: 'text-purple-400' },
+    { role: 'DONOR', label: 'LifeLink Donor', icon: Heart, color: 'text-rose-400' }
   ];
 
   return (

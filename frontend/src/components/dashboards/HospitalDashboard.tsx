@@ -19,7 +19,11 @@ import {
   Upload,
   Plus,
   Check,
-  Download
+  Download,
+  Heart,
+  Droplet,
+  Shield,
+  Bell
 } from 'lucide-react';
 import { UserProfile, CaseSummary } from '../../types/curareach';
 import { 
@@ -31,8 +35,15 @@ import {
   reportEncounterStatusApi,
   fetchAllTreatmentTransactions,
   createTreatmentInvoiceApi,
-  uploadMedicalDocumentApi
+  uploadMedicalDocumentApi,
+  createHospitalDonorRequestApi,
+  getHospitalDonorRequestsApi,
+  getAuthorizedIntroductionsApi,
+  closeHospitalDonorRequestApi,
+  getLifeLinkPlansApi,
+  activateDemoSubscriptionApi
 } from '../../services/curareachApi';
+
 
 interface HospitalDashboardProps {
   currentUser: UserProfile;
@@ -48,8 +59,22 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
   const [profile, setProfile] = useState<any>(null);
   const [referrals, setReferrals] = useState<any[]>([]);
   const [treatmentInvoices, setTreatmentInvoices] = useState<any[]>([]);
-  const [activeHospitalTab, setActiveHospitalTab] = useState<'REFERRALS' | 'TREATMENT_BILLING'>('REFERRALS');
+  const [activeHospitalTab, setActiveHospitalTab] = useState<'REFERRALS' | 'TREATMENT_BILLING' | 'LIFELINK_DONORS'>('REFERRALS');
   const [isLoading, setIsLoading] = useState(true);
+
+  // LifeLink Voluntary Donors State
+  const [donorRequests, setDonorRequests] = useState<any[]>([]);
+  const [introductions, setIntroductions] = useState<any[]>([]);
+  const [isDonorReqModalOpen, setIsDonorReqModalOpen] = useState(false);
+  const [reqBloodGroup, setReqBloodGroup] = useState('O-');
+  const [reqUnits, setReqUnits] = useState(2);
+  const [reqHours, setReqHours] = useState(24);
+  const [reqDesc, setReqDesc] = useState('Urgent blood requirement for emergency admission.');
+  const [isSubmittingDonorReq, setIsSubmittingDonorReq] = useState(false);
+  const [isSubModalOpen, setIsSubModalOpen] = useState(false);
+  const [subPlans, setSubPlans] = useState<any[]>([]);
+  const [selectedPlanCode, setSelectedPlanCode] = useState('PROFESSIONAL');
+  const [isActivatingSub, setIsActivatingSub] = useState(false);
 
   // Treatment Invoicing State
   const [invoicingRef, setInvoicingRef] = useState<any>(null);
@@ -94,10 +119,13 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
   const loadHospitalData = async () => {
     setIsLoading(true);
     try {
-      const [profRes, refsRes, txRes] = await Promise.all([
+      const [profRes, refsRes, txRes, donorReqs, intros, plans] = await Promise.all([
         fetchHospitalProfile(),
         fetchHospitalReferrals(),
-        fetchAllTreatmentTransactions().catch(() => [])
+        fetchAllTreatmentTransactions().catch(() => []),
+        getHospitalDonorRequestsApi().catch(() => []),
+        getAuthorizedIntroductionsApi().catch(() => []),
+        getLifeLinkPlansApi().catch(() => [])
       ]);
       setProfile(profRes);
       setTotalBeds(profRes.total_beds);
@@ -106,6 +134,9 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
       setHasOxygen(profRes.has_oxygen_manifold);
       setReferrals(refsRes);
       setTreatmentInvoices(txRes);
+      setDonorRequests(donorReqs || []);
+      setIntroductions(intros || []);
+      setSubPlans(plans || []);
     } catch (err: any) {
       console.error('Failed to load hospital data:', err);
     } finally {
@@ -168,6 +199,57 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
       alert(err.message || 'Failed to upload diagnostic report.');
     } finally {
       setIsUploadingDoc(false);
+    }
+  };
+
+  const handleCreateDonorRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile?.id) return;
+    setIsSubmittingDonorReq(true);
+    try {
+      await createHospitalDonorRequestApi({
+        hospital_id: profile.id,
+        donation_category: 'BLOOD',
+        requested_blood_group: reqBloodGroup,
+        units_needed: reqUnits,
+        city: profile.city || 'Shivamogga',
+        district: profile.district || 'Shivamogga',
+        requested_until_hours: reqHours,
+        description: reqDesc
+      });
+      alert(`Emergency blood broadcast submitted! Voluntary donors in ${profile.district || 'the district'} are being notified.`);
+      setIsDonorReqModalOpen(false);
+      loadHospitalData();
+    } catch (err: any) {
+      alert(`Failed to broadcast: ${err.message}`);
+    } finally {
+      setIsSubmittingDonorReq(false);
+    }
+  };
+
+  const handleCloseDonorRequest = async (reqId: string) => {
+    if (!window.confirm('Close this emergency donor broadcast request?')) return;
+    try {
+      await closeHospitalDonorRequestApi(reqId);
+      alert('Broadcast request closed.');
+      loadHospitalData();
+    } catch (err: any) {
+      alert(`Failed to close request: ${err.message}`);
+    }
+  };
+
+  const handleActivateDemoSub = async (planCode: string) => {
+    if (!profile?.id) return;
+    setIsActivatingSub(true);
+    try {
+      await activateDemoSubscriptionApi(profile.id, planCode);
+      alert(`LifeLink Software Subscription successfully updated to ${planCode} plan!`);
+      setIsSubModalOpen(false);
+      loadHospitalData();
+    } catch (err: any) {
+      alert(`Failed to activate subscription: ${err.message}`);
+    } finally {
+      setIsActivatingSub(false);
     }
   };
 
@@ -367,9 +449,25 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
             {treatmentInvoices.length}
           </span>
         </button>
+
+        <button
+          onClick={() => setActiveHospitalTab('LIFELINK_DONORS')}
+          className={`px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-all flex items-center gap-2 ${
+            activeHospitalTab === 'LIFELINK_DONORS'
+              ? 'bg-rose-950/60 text-rose-300 border-b-2 border-rose-500'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Heart className="w-4 h-4 text-rose-500" />
+          <span>LifeLink Voluntary Donors</span>
+          <span className="bg-rose-900/60 text-rose-300 text-[10px] px-1.5 py-0.2 rounded-full font-mono">
+            {donorRequests.length}
+          </span>
+        </button>
       </div>
 
-      {activeHospitalTab === 'REFERRALS' ? (
+      {activeHospitalTab === 'REFERRALS' && (
+
         /* Incoming Referrals Queue */
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -500,7 +598,9 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
             </div>
           )}
         </div>
-      ) : (
+      )}
+
+      {activeHospitalTab === 'TREATMENT_BILLING' && (
         /* Clinical Treatment Billing Table */
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-md">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -560,6 +660,244 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* 3. LifeLink Voluntary Donors Management Tab */}
+      {activeHospitalTab === 'LIFELINK_DONORS' && (
+        <div className="space-y-6">
+          {/* Software Tier & Platform Status Banner */}
+          <div className="bg-gradient-to-r from-rose-950/40 via-slate-900 to-indigo-950/40 border border-rose-900/30 rounded-2xl p-5 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                  LifeLink B2B Software Module
+                </span>
+                <span className="text-xs text-slate-400">
+                  Facility Tier: <strong className="text-white">Professional Emergency Network</strong>
+                </span>
+              </div>
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <Heart className="w-5 h-5 text-rose-500 fill-rose-500/20" />
+                <span>Voluntary Donor Coordination Network</span>
+              </h2>
+              <p className="text-xs text-slate-400 max-w-2xl">
+                CuraReach LifeLink connects your clinical team to verified voluntary blood donors. Contact details are strictly private until a volunteer accepts the emergency broadcast and provides explicit consent.
+              </p>
+              <div className="pt-1 text-[11px] text-amber-300/90 font-medium flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5 text-amber-400" />
+                <span>Legal & Clinical Safeguard: Emergency clinical referrals are never gated by software licenses.</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+              <button
+                onClick={() => setIsSubModalOpen(true)}
+                className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+              >
+                <CreditCard className="w-4 h-4 text-indigo-400" />
+                <span>Manage Software Tier</span>
+              </button>
+              <button
+                onClick={() => setIsDonorReqModalOpen(true)}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-lg shadow-rose-950 transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Broadcast Emergency Blood Request</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Metrics Bar */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+              <span className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold block">Active Broadcasts</span>
+              <span className="text-xl font-bold text-rose-400 mt-1 block">
+                {donorRequests.filter(r => r.status === 'BROADCASTED').length}
+              </span>
+              <span className="text-[10px] text-slate-500">Live matching in district</span>
+            </div>
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+              <span className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold block">Authorized Introductions</span>
+              <span className="text-xl font-bold text-emerald-400 mt-1 block">
+                {introductions.length}
+              </span>
+              <span className="text-[10px] text-slate-500">Volunteers with contact consent</span>
+            </div>
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+              <span className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold block">Donor Network</span>
+              <span className="text-xl font-bold text-teal-400 mt-1 block">Verified Voluntary</span>
+              <span className="text-[10px] text-slate-500">Zero commercial remuneration</span>
+            </div>
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+              <span className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold block">NOTTO Integration</span>
+              <span className="text-xl font-bold text-indigo-400 mt-1 block">Educational</span>
+              <span className="text-[10px] text-slate-500">Official registry referrals</span>
+            </div>
+          </div>
+
+          {/* Authorized Volunteer Introductions (Direct Contact) */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="font-bold text-white text-sm flex items-center gap-2">
+                  <UserCheck className="w-4 h-4 text-emerald-400" />
+                  <span>Authorized Volunteer Introductions ({introductions.length})</span>
+                </h3>
+                <p className="text-xs text-slate-400">
+                  These voluntary donors accepted an emergency broadcast and explicitly consented to share their contact with this hospital team.
+                </p>
+              </div>
+              <span className="text-[11px] bg-emerald-950 text-emerald-300 border border-emerald-800/40 px-2.5 py-0.5 rounded-full font-mono">
+                Consent Verified
+              </span>
+            </div>
+
+            {introductions.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-500 bg-slate-950/40 rounded-xl border border-slate-800/60">
+                No active donor introductions. When a volunteer donor accepts your emergency broadcast and grants contact sharing, their unmasked contact details and arrival ETA will appear here immediately.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {introductions.map((intro) => (
+                  <div
+                    key={intro.id}
+                    className="bg-slate-950/60 border border-slate-800 hover:border-slate-700 rounded-xl p-4 space-y-3"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <strong className="text-white text-sm">{intro.donor_name}</strong>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                            {intro.blood_group || 'Blood Donor'}
+                          </span>
+                        </div>
+                        <span className="text-slate-400 text-xs flex items-center gap-1.5 mt-0.5">
+                          <span>{intro.city}, {intro.district}</span>
+                          <span>&bull;</span>
+                          <span>Prefers: {intro.preferred_language || 'English'}</span>
+                        </span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800/40">
+                        {intro.status}
+                      </span>
+                    </div>
+
+                    <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-lg flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs">
+                        <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-slate-300">Authorized Phone:</span>
+                        <strong className="text-emerald-300 font-mono text-xs">{intro.donor_phone}</strong>
+                      </div>
+                      <a
+                        href={`tel:${intro.donor_phone}`}
+                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg transition-all"
+                      >
+                        Call Donor
+                      </a>
+                    </div>
+
+                    <div className="text-[11px] text-slate-500 flex items-center justify-between pt-1">
+                      <span>Ref ID: <span className="font-mono text-slate-400">{intro.id.slice(0, 8)}...</span></span>
+                      <span>Introduced: {intro.introduced_at ? new Date(intro.introduced_at).toLocaleString() : 'Recently'}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Hospital Emergency Broadcast Requests Table */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="font-bold text-white text-sm flex items-center gap-2">
+                  <Droplet className="w-4 h-4 text-rose-400" />
+                  <span>Emergency Blood Broadcast Log ({donorRequests.length})</span>
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Targeted broadcast requests dispatched to matching donors in {profile?.district || 'this district'}.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsDonorReqModalOpen(true)}
+                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New Broadcast</span>
+              </button>
+            </div>
+
+            {donorRequests.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-500 bg-slate-950/40 rounded-xl border border-slate-800/60">
+                No active or historical emergency blood broadcasts. Click "+ Broadcast Emergency Blood Request" to issue a live request.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800 font-mono text-[11px]">
+                    <tr>
+                      <th className="p-3">Reference</th>
+                      <th className="p-3">Blood Group</th>
+                      <th className="p-3">Units Needed</th>
+                      <th className="p-3">Location</th>
+                      <th className="p-3">Valid Until</th>
+                      <th className="p-3">Status</th>
+                      <th className="p-3">Description</th>
+                      <th className="p-3 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {donorRequests.map((req) => (
+                      <tr key={req.id} className="hover:bg-slate-950/40">
+                        <td className="p-3 font-mono font-bold text-slate-300">
+                          {req.id ? req.id.slice(0, 8) : 'REQ'}
+                        </td>
+                        <td className="p-3">
+                          <span className="px-2 py-0.5 rounded font-bold text-xs bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                            {req.requested_blood_group || 'Any'}
+                          </span>
+                        </td>
+                        <td className="p-3 font-bold text-white">
+                          {req.units_needed} units
+                        </td>
+                        <td className="p-3 text-slate-400">
+                          {req.city || profile?.city || 'Shivamogga'}, {req.district || profile?.district || 'Shivamogga'}
+                        </td>
+                        <td className="p-3 text-slate-400 font-mono text-[11px]">
+                          {req.requested_until ? new Date(req.requested_until).toLocaleString() : 'Open'}
+                        </td>
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            req.status === 'BROADCASTED'
+                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
+                              : req.status === 'FULFILLED'
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                              : 'bg-slate-800 text-slate-400'
+                          }`}>
+                            {req.status}
+                          </span>
+                        </td>
+                        <td className="p-3 text-slate-300 max-w-xs truncate">
+                          {req.description || 'Emergency requirement.'}
+                        </td>
+                        <td className="p-3 text-right">
+                          {req.status === 'BROADCASTED' && (
+                            <button
+                              onClick={() => handleCloseDonorRequest(req.id)}
+                              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] font-semibold border border-slate-700"
+                            >
+                              Close
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -995,6 +1333,209 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Broadcast Emergency Blood Request Modal */}
+      {isDonorReqModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <form onSubmit={handleCreateDonorRequest} className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 text-slate-100 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center">
+                  <Droplet className="w-5 h-5 fill-rose-500/20" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base">Broadcast Emergency Blood Request</h3>
+                  <p className="text-[11px] text-slate-400">Targeted voluntary donor alert for {profile?.district || 'Shivamogga'}</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setIsDonorReqModalOpen(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-rose-950/30 border border-rose-800/40 rounded-xl p-3 text-xs text-rose-200/90 space-y-1">
+              <div className="font-bold text-rose-300 flex items-center gap-1.5">
+                <Shield className="w-4 h-4" />
+                <span>Ethical & Voluntary Compliance</span>
+              </div>
+              <p className="text-[11px] text-slate-300">
+                In strict accordance with the National Blood Policy of India, all coordination is voluntary and non-remunerated. Contact info will be shared only when a matching donor explicitly opts in.
+              </p>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-300 font-semibold block mb-1">Required Blood Group *</label>
+                  <select
+                    value={reqBloodGroup}
+                    onChange={(e) => setReqBloodGroup(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono font-bold"
+                  >
+                    <option value="O-">O Negative (Universal Donor)</option>
+                    <option value="O+">O Positive</option>
+                    <option value="A-">A Negative</option>
+                    <option value="A+">A Positive</option>
+                    <option value="B-">B Negative</option>
+                    <option value="B+">B Positive</option>
+                    <option value="AB-">AB Negative</option>
+                    <option value="AB+">AB Positive (Universal Recipient)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-semibold block mb-1">Units Required (Whole Blood / PRBC) *</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    required
+                    value={reqUnits}
+                    onChange={(e) => setReqUnits(Number(e.target.value))}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Broadcast Validity Window *</label>
+                <select
+                  value={reqHours}
+                  onChange={(e) => setReqHours(Number(e.target.value))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                >
+                  <option value={6}>6 Hours (Extreme Emergency / Acute Hemorrhage)</option>
+                  <option value={12}>12 Hours (Urgent Inpatient Requirement)</option>
+                  <option value={24}>24 Hours (Next-day Surgery Reserve)</option>
+                  <option value={48}>48 Hours (Standard Hospital Replenishment)</option>
+                  <option value={72}>72 Hours (Elective / Scheduled Procedure)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Clinical Context / Urgency Details *</label>
+                <textarea
+                  rows={3}
+                  required
+                  value={reqDesc}
+                  onChange={(e) => setReqDesc(e.target.value)}
+                  placeholder="e.g. Critical requirement for acute poly-trauma stabilization in ICU Ward 3. Cross-match ready."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsDonorReqModalOpen(false)}
+                className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmittingDonorReq}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs shadow flex items-center gap-1.5"
+              >
+                {isSubmittingDonorReq ? <Clock className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                <span>Broadcast to Volunteer Donors</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Hospital LifeLink Software Subscription Modal */}
+      {isSubModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 text-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+                  <CreditCard className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base">LifeLink Hospital Software Subscription</h3>
+                  <p className="text-[11px] text-slate-400">Institutional tooling for voluntary donor coordination</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setIsSubModalOpen(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-indigo-950/30 border border-indigo-800/40 rounded-xl p-3 text-xs text-indigo-200/90 space-y-1">
+              <div className="font-bold text-indigo-300 flex items-center gap-1.5">
+                <Shield className="w-4 h-4" />
+                <span>Strict Separation of Revenue and Emergency Care</span>
+              </div>
+              <p className="text-[11px] text-slate-300">
+                CuraReach 360 clinical referrals, case transfers, and emergency triage are 100% free and open. LifeLink subscription plans are voluntary B2B software licenses providing automated multi-channel messaging and institutional analytics.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+              {subPlans.length > 0 ? (
+                subPlans.map((plan) => (
+                  <div
+                    key={plan.id}
+                    className={`rounded-xl p-4 border flex flex-col justify-between space-y-3 ${
+                      plan.plan_code === 'PROFESSIONAL'
+                        ? 'bg-indigo-950/40 border-indigo-500/60 shadow-lg'
+                        : 'bg-slate-950/60 border-slate-800'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-white uppercase">{plan.plan_name}</span>
+                        {plan.plan_code === 'PROFESSIONAL' && (
+                          <span className="text-[9px] bg-indigo-500 text-white font-bold px-1.5 py-0.5 rounded">
+                            Popular
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-2">
+                        <span className="text-2xl font-bold text-white">₹{plan.monthly_fee_inr}</span>
+                        <span className="text-[10px] text-slate-400"> / month</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-2">{plan.description}</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={isActivatingSub}
+                      onClick={() => handleActivateDemoSub(plan.plan_code)}
+                      className={`w-full py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+                        plan.plan_code === 'PROFESSIONAL'
+                          ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow'
+                          : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                      }`}
+                    >
+                      {isActivatingSub ? <Clock className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                      <span>Activate {plan.plan_name}</span>
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="col-span-3 text-center py-6 text-xs text-slate-500">
+                  Loading software subscription plans...
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsSubModalOpen(false)}
+                className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
