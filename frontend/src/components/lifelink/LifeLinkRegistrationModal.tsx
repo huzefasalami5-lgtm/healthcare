@@ -468,15 +468,21 @@ export const LifeLinkRegistrationModal: React.FC<LifeLinkRegistrationModalProps>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Voluntary Donation Interests (Select all that apply)
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+                  <span>Voluntary Donation Interests (Organs, Tissues & Blood)</span>
+                  <span className="text-[10px] text-rose-400 font-normal">Select all that apply</span>
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {[
-                    { id: 'BLOOD', label: 'Whole Blood' },
-                    { id: 'PLATELETS', label: 'Platelets' },
-                    { id: 'PLASMA', label: 'Plasma' },
-                    { id: 'DECEASED_ORGAN_PLEDGE', label: 'Deceased Pledge' }
+                    { id: 'KIDNEY', label: '🫘 Kidney', desc: 'Living / Deceased Pledge' },
+                    { id: 'LIVER', label: '🧬 Liver Lobe', desc: 'Living / Deceased Pledge' },
+                    { id: 'HEART', label: '🫀 Heart', desc: 'NOTTO Deceased Pledge' },
+                    { id: 'LUNGS', label: '🫁 Lungs', desc: 'NOTTO Deceased Pledge' },
+                    { id: 'PANCREAS', label: '🩺 Pancreas', desc: 'Deceased Organ Pledge' },
+                    { id: 'CORNEA', label: '👁️ Corneas / Eyes', desc: 'Official Eye Bank Pledge' },
+                    { id: 'BONE_MARROW', label: '🦴 Bone Marrow', desc: 'Stem Cell Registry' },
+                    { id: 'BLOOD', label: '🩸 Whole Blood', desc: 'Emergency Blood Need' },
+                    { id: 'PLATELETS', label: '🧪 Platelets / Plasma', desc: 'Component Donation' },
                   ].map(cat => {
                     const checked = optACategories.includes(cat.id);
                     return (
@@ -484,14 +490,17 @@ export const LifeLinkRegistrationModal: React.FC<LifeLinkRegistrationModalProps>
                         key={cat.id}
                         type="button"
                         onClick={() => handleToggleCategory(cat.id)}
-                        className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all text-left flex items-center justify-between ${
+                        className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all text-left flex flex-col justify-between ${
                           checked
-                            ? 'bg-rose-500/20 text-rose-200 border-rose-500/60'
+                            ? 'bg-rose-500/20 text-rose-200 border-rose-500/60 shadow-sm shadow-rose-950/40'
                             : 'bg-slate-900/60 text-slate-400 border-slate-800 hover:border-slate-700'
                         }`}
                       >
-                        <span>{cat.label}</span>
-                        {checked && <CheckCircle className="w-3.5 h-3.5 text-rose-400" />}
+                        <div className="flex items-center justify-between w-full">
+                          <span>{cat.label}</span>
+                          {checked && <CheckCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />}
+                        </div>
+                        <span className="text-[10px] font-normal text-slate-500 mt-0.5">{cat.desc}</span>
                       </button>
                     );
                   })}

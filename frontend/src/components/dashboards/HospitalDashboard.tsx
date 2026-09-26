@@ -67,10 +67,11 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
   const [donorRequests, setDonorRequests] = useState<any[]>([]);
   const [introductions, setIntroductions] = useState<any[]>([]);
   const [isDonorReqModalOpen, setIsDonorReqModalOpen] = useState(false);
+  const [reqCategory, setReqCategory] = useState('KIDNEY');
   const [reqBloodGroup, setReqBloodGroup] = useState('O-');
-  const [reqUnits, setReqUnits] = useState(2);
-  const [reqHours, setReqHours] = useState(24);
-  const [reqDesc, setReqDesc] = useState('Urgent blood requirement for emergency admission.');
+  const [reqUnits, setReqUnits] = useState(1);
+  const [reqHours, setReqHours] = useState(48);
+  const [reqDesc, setReqDesc] = useState('Urgent voluntary Kidney donor coordination for end-stage renal disease (ESRD) transplant matching.');
   const [isSubmittingDonorReq, setIsSubmittingDonorReq] = useState(false);
   const [isSubModalOpen, setIsSubModalOpen] = useState(false);
   const [subPlans, setSubPlans] = useState<any[]>([]);
@@ -210,7 +211,7 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
     try {
       await createHospitalDonorRequestApi({
         hospital_id: profile.id,
-        donation_category: 'BLOOD',
+        donation_category: reqCategory,
         requested_blood_group: reqBloodGroup,
         units_needed: reqUnits,
         city: profile.city || 'Shivamogga',
@@ -218,7 +219,7 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
         requested_until_hours: reqHours,
         description: reqDesc
       });
-      alert(`Emergency blood broadcast submitted! Voluntary donors in ${profile.district || 'the district'} are being notified.`);
+      alert(`Emergency ${reqCategory} donor broadcast submitted! Matching voluntary donors in ${profile.district || 'the district'} are being notified.`);
       setIsDonorReqModalOpen(false);
       loadHospitalData();
     } catch (err: any) {
@@ -842,8 +843,9 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
                   <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800 font-mono text-[11px]">
                     <tr>
                       <th className="p-3">Reference</th>
+                      <th className="p-3">Category / Organ</th>
                       <th className="p-3">Blood Group</th>
-                      <th className="p-3">Units Needed</th>
+                      <th className="p-3">Quantity</th>
                       <th className="p-3">Location</th>
                       <th className="p-3">Valid Until</th>
                       <th className="p-3">Status</th>
@@ -858,12 +860,27 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
                           {req.id ? req.id.slice(0, 8) : 'REQ'}
                         </td>
                         <td className="p-3">
+                          <span className={`px-2 py-0.5 rounded font-bold text-xs ${
+                            req.donation_category === 'KIDNEY' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40' :
+                            req.donation_category === 'LIVER' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' :
+                            req.donation_category === 'HEART' ? 'bg-red-500/20 text-red-300 border border-red-500/40' :
+                            req.donation_category === 'CORNEA' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' :
+                            'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                          }`}>
+                            {req.donation_category === 'KIDNEY' ? '🫘 KIDNEY' :
+                             req.donation_category === 'LIVER' ? '🧬 LIVER' :
+                             req.donation_category === 'HEART' ? '🫀 HEART' :
+                             req.donation_category === 'CORNEA' ? '👁️ CORNEA' :
+                             req.donation_category || 'BLOOD'}
+                          </span>
+                        </td>
+                        <td className="p-3">
                           <span className="px-2 py-0.5 rounded font-bold text-xs bg-rose-500/20 text-rose-300 border border-rose-500/40">
                             {req.requested_blood_group || 'Any'}
                           </span>
                         </td>
                         <td className="p-3 font-bold text-white">
-                          {req.units_needed} units
+                          {req.units_needed} {req.donation_category === 'BLOOD' || req.donation_category === 'PLATELETS' ? 'units' : 'graft'}
                         </td>
                         <td className="p-3 text-slate-400">
                           {req.city || profile?.city || 'Shivamogga'}, {req.district || profile?.district || 'Shivamogga'}
@@ -1370,9 +1387,41 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
             </div>
 
             <div className="space-y-3 text-xs">
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Donation Category / Organ Type *</label>
+                <select
+                  value={reqCategory}
+                  onChange={(e) => {
+                    const cat = e.target.value;
+                    setReqCategory(cat);
+                    if (cat === 'KIDNEY') {
+                      setReqDesc('Urgent voluntary Kidney donor coordination for end-stage renal disease (ESRD) transplant matching.');
+                    } else if (cat === 'LIVER') {
+                      setReqDesc('Urgent living/deceased Liver Lobe evaluation inquiry for acute fulminant hepatic failure.');
+                    } else if (cat === 'HEART') {
+                      setReqDesc('Emergency NOTTO state organ network priority Heart match inquiry for cardiogenic shock recipient.');
+                    } else if (cat === 'CORNEA') {
+                      setReqDesc('Voluntary Cornea / Eye tissue transplant requirement for post-traumatic reconstructive keratoplasty.');
+                    } else if (cat === 'BLOOD') {
+                      setReqDesc('Critical acute blood requirement for emergency admission & surgery reserve.');
+                    }
+                  }}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-bold"
+                >
+                  <option value="KIDNEY">🫘 Kidney (Living / Deceased Transplant Coordination)</option>
+                  <option value="LIVER">🧬 Liver Lobe (Living / Deceased Evaluation)</option>
+                  <option value="HEART">🫀 Heart (Deceased Priority Allocation Alert)</option>
+                  <option value="LUNGS">🫁 Lungs (NOTTO Deceased Organ Pledge)</option>
+                  <option value="CORNEA">👁️ Cornea / Eye (Official Eye Bank Tissue Coordination)</option>
+                  <option value="BONE_MARROW">🦴 Bone Marrow / Stem Cells (Hematology Registry)</option>
+                  <option value="BLOOD">🩸 Whole Blood / PRBC Emergency</option>
+                  <option value="PLATELETS">🧪 Platelets / Plasma</option>
+                </select>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-slate-300 font-semibold block mb-1">Required Blood Group *</label>
+                  <label className="text-slate-300 font-semibold block mb-1">Compatible Blood Group *</label>
                   <select
                     value={reqBloodGroup}
                     onChange={(e) => setReqBloodGroup(e.target.value)}
@@ -1390,7 +1439,9 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
                 </div>
 
                 <div>
-                  <label className="text-slate-300 font-semibold block mb-1">Units Required (Whole Blood / PRBC) *</label>
+                  <label className="text-slate-300 font-semibold block mb-1">
+                    {reqCategory === 'BLOOD' || reqCategory === 'PLATELETS' ? 'Units Required *' : 'Grafts / Donors Needed *'}
+                  </label>
                   <input
                     type="number"
                     min={1}

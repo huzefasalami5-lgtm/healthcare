@@ -251,9 +251,9 @@ class LifeLinkService:
                     id=str(uuid.uuid4()),
                     donor_id=donor_id,
                     donation_category=cat,
-                    self_reported_blood_group=blood_group if cat == DonationCategory.BLOOD else None,
-                    living_organ_interest=living_organ_interest if cat == DonationCategory.LIVING_ORGAN_INTEREST else None,
-                    tissue_interest=tissue_interest if cat == DonationCategory.TISSUE_INTEREST else None,
+                    self_reported_blood_group=blood_group,
+                    living_organ_interest=living_organ_interest if cat in [DonationCategory.LIVING_ORGAN_INTEREST, DonationCategory.KIDNEY, DonationCategory.LIVER] else None,
+                    tissue_interest=tissue_interest if cat in [DonationCategory.TISSUE_INTEREST, DonationCategory.CORNEA, DonationCategory.BONE_MARROW] else None,
                     willing_to_travel=willing_to_travel if willing_to_travel is not None else False,
                     active=True
                 )
@@ -597,6 +597,31 @@ class LifeLinkService:
             DonationPreference.donation_category == DonationCategory.BLOOD,
             DonationPreference.active == True
         ).count()
+        kidney_donors = db.query(DonationPreference).filter(
+            DonationPreference.donation_category == DonationCategory.KIDNEY,
+            DonationPreference.active == True
+        ).count()
+        liver_donors = db.query(DonationPreference).filter(
+            DonationPreference.donation_category == DonationCategory.LIVER,
+            DonationPreference.active == True
+        ).count()
+        heart_donors = db.query(DonationPreference).filter(
+            DonationPreference.donation_category == DonationCategory.HEART,
+            DonationPreference.active == True
+        ).count()
+        cornea_donors = db.query(DonationPreference).filter(
+            DonationPreference.donation_category == DonationCategory.CORNEA,
+            DonationPreference.active == True
+        ).count()
+        organ_donors = db.query(DonationPreference).filter(
+            DonationPreference.donation_category.in_([
+                DonationCategory.KIDNEY, DonationCategory.LIVER, DonationCategory.HEART,
+                DonationCategory.LUNGS, DonationCategory.PANCREAS, DonationCategory.CORNEA,
+                DonationCategory.BONE_MARROW, DonationCategory.DECEASED_ORGAN_PLEDGE,
+                DonationCategory.LIVING_ORGAN_INTEREST
+            ]),
+            DonationPreference.active == True
+        ).count()
         opted_in = db.query(DonorConsent).filter(
             DonorConsent.consent_type == "REQUEST_NOTIFICATIONS",
             DonorConsent.granted == True
@@ -615,6 +640,11 @@ class LifeLinkService:
         return {
             "registered_donors": total_donors,
             "volunteer_blood_donors": blood_donors,
+            "volunteer_organ_donors": organ_donors,
+            "kidney_donors_count": kidney_donors,
+            "liver_donors_count": liver_donors,
+            "heart_donors_count": heart_donors,
+            "cornea_donors_count": cornea_donors,
             "opted_into_notifications": opted_in,
             "hospital_requests_count": total_requests,
             "authorized_introductions_count": total_introductions,

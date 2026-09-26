@@ -54,6 +54,7 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({ currentUser, onR
   // Form states
   const [bloodGroup, setBloodGroup] = useState('O-');
   const [willingToTravel, setWillingToTravel] = useState(true);
+  const [selectedOrgans, setSelectedOrgans] = useState<string[]>(['KIDNEY', 'LIVER', 'BLOOD']);
   const [livingOrganInterest, setLivingOrganInterest] = useState('');
   const [tissueInterest, setTissueInterest] = useState('');
   const [availabilityStatus, setAvailabilityStatus] = useState('AVAILABLE');
@@ -79,17 +80,21 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({ currentUser, onR
         getDonorActivityApi().catch(() => null)
       ]);
 
-      if (profData) {
-        setProfile(profData);
-        setAvailabilityStatus(profData.availability || 'AVAILABLE');
-        const bloodPref = profData.preferences?.find((p: any) => p.category === 'BLOOD');
-        if (bloodPref) {
-          setBloodGroup(bloodPref.blood_group || 'O-');
-          setWillingToTravel(bloodPref.willing_to_travel ?? true);
+        if (profData) {
+          setProfile(profData);
+          setAvailabilityStatus(profData.availability || 'AVAILABLE');
+          const bloodPref = profData.preferences?.find((p: any) => p.category === 'BLOOD');
+          if (bloodPref) {
+            setBloodGroup(bloodPref.blood_group || 'O-');
+            setWillingToTravel(bloodPref.willing_to_travel ?? true);
+          }
+          const activeCats = profData.preferences?.filter((p: any) => p.active !== false).map((p: any) => p.category) || [];
+          if (activeCats.length > 0) {
+            setSelectedOrgans(activeCats);
+          }
+          const notif = profData.consents?.find((c: any) => c.type === 'REQUEST_NOTIFICATIONS');
+          setNotifConsent(notif ? notif.granted : true);
         }
-        const notif = profData.consents?.find((c: any) => c.type === 'REQUEST_NOTIFICATIONS');
-        setNotifConsent(notif ? notif.granted : true);
-      }
       setInvitations(invsData || []);
       setActivity(actData);
     } catch (err: any) {
@@ -104,11 +109,12 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({ currentUser, onR
       setSubmittingAction(true);
       await updateDonorPreferencesApi({
         self_reported_blood_group: bloodGroup,
+        donation_categories: selectedOrgans,
         willing_to_travel: willingToTravel,
         living_organ_interest: livingOrganInterest,
         tissue_interest: tissueInterest
       });
-      setSuccessMsg('Donation preferences updated successfully.');
+      setSuccessMsg('Donation preferences and pledged organs updated successfully.');
       setTimeout(() => setSuccessMsg(null), 4000);
       loadDonorData();
     } catch (err: any) {
@@ -222,6 +228,12 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({ currentUser, onR
               <div className="text-xs text-slate-400">Self-Reported Blood Group</div>
               <div className="text-xl font-bold text-rose-400 font-mono flex items-center justify-end gap-1">
                 <Droplet className="w-4 h-4 fill-rose-400 text-rose-400" /> {bloodGroup}
+              </div>
+            </div>
+            <div className="px-4 py-2 rounded-xl bg-slate-900/80 border border-slate-700/60 text-right">
+              <div className="text-xs text-slate-400">Pledged Organs & Tissues</div>
+              <div className="text-xs font-bold text-rose-300 flex items-center justify-end gap-1 font-mono">
+                {selectedOrgans.length} Active {selectedOrgans.some(o => ['KIDNEY', 'LIVER', 'HEART'].includes(o)) && '• Organs'}
               </div>
             </div>
             <div className="px-4 py-2 rounded-xl bg-slate-900/80 border border-slate-700/60 text-right">
@@ -461,6 +473,53 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({ currentUser, onR
               </p>
             </div>
 
+            {/* Organ & Tissue Pledges */}
+            <div className="pt-2">
+              <label className="block text-xs font-semibold text-slate-300 mb-2 flex items-center justify-between">
+                <span>Pledged Organs & Donation Categories (Select all that apply)</span>
+                <span className="text-[10px] text-rose-400 font-normal">Active: {selectedOrgans.length} selected</span>
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {[
+                  { id: 'KIDNEY', label: '🫘 Kidney', desc: 'Living / Deceased Pledge' },
+                  { id: 'LIVER', label: '🧬 Liver Lobe', desc: 'Living / Deceased Pledge' },
+                  { id: 'HEART', label: '🫀 Heart', desc: 'NOTTO Deceased Pledge' },
+                  { id: 'LUNGS', label: '🫁 Lungs', desc: 'NOTTO Deceased Pledge' },
+                  { id: 'PANCREAS', label: '🩺 Pancreas', desc: 'Deceased Organ Pledge' },
+                  { id: 'CORNEA', label: '👁️ Corneas / Eyes', desc: 'Official Eye Bank Pledge' },
+                  { id: 'BONE_MARROW', label: '🦴 Bone Marrow', desc: 'Stem Cell Registry' },
+                  { id: 'BLOOD', label: '🩸 Whole Blood', desc: 'Emergency Blood Need' },
+                  { id: 'PLATELETS', label: '🧪 Platelets / Plasma', desc: 'Component Donation' },
+                ].map(cat => {
+                  const checked = selectedOrgans.includes(cat.id);
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedOrgans(prev =>
+                          prev.includes(cat.id)
+                            ? prev.filter(c => c !== cat.id)
+                            : [...prev, cat.id]
+                        );
+                      }}
+                      className={`p-3 rounded-xl text-xs font-semibold border transition-all text-left flex flex-col justify-between ${
+                        checked
+                          ? 'bg-rose-500/20 text-rose-200 border-rose-500/60 shadow-sm shadow-rose-950/40'
+                          : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <span>{cat.label}</span>
+                        {checked && <CheckCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />}
+                      </div>
+                      <span className="text-[10px] font-normal text-slate-500 mt-1">{cat.desc}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="pt-2">
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
@@ -469,7 +528,7 @@ export const DonorDashboard: React.FC<DonorDashboardProps> = ({ currentUser, onR
                   onChange={(e) => setWillingToTravel(e.target.checked)}
                   className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 bg-slate-800 border-slate-700"
                 />
-                <span className="text-sm text-slate-200">Willing to travel to neighboring health centres in emergency cases</span>
+                <span className="text-sm text-slate-200">Willing to travel to neighboring health centres or transplant centers in emergency cases</span>
               </label>
             </div>
 

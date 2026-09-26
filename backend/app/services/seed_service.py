@@ -1103,20 +1103,20 @@ def seed_lifelink_records(db: Session) -> None:
     db.add_all([p_starter, p_pro, p_ent])
     db.commit()
 
-    # 2. SEED 8 SYNTHETIC VOLUNTEER DONORS
+    # 2. SEED 8 SYNTHETIC VOLUNTEER DONORS (ORGAN + BLOOD)
     donors_data = [
-        ("donor1@curareach.org", "Rahul Verma", "O-", "Shivamogga", "Shivamogga", "+91-98450-77101", "1994-03-12"),
-        ("donor2@curareach.org", "Sneha Nair", "B+", "Bhadravathi", "Shivamogga", "+91-98450-77102", "1997-07-25"),
-        ("donor3@curareach.org", "Arjun Rao", "A+", "Shivamogga", "Shivamogga", "+91-98450-77103", "1991-11-05"),
-        ("donor4@curareach.org", "Meera Kulkarni", "AB+", "Kudligere", "Shivamogga", "+91-98450-77104", "1998-02-18"),
-        ("donor5@curareach.org", "Vikram Gowda", "O+", "Holalur", "Shivamogga", "+91-98450-77105", "1989-09-30"),
-        ("donor6@curareach.org", "Ananya Bhat", "A-", "Shivamogga", "Shivamogga", "+91-98450-77106", "1996-06-14"),
-        ("donor7@curareach.org", "Mohammed Farhan", "B-", "Bhadravathi", "Shivamogga", "+91-98450-77107", "1993-12-22"),
-        ("donor8@curareach.org", "Pooja Hegde", "O+", "Shivamogga", "Shivamogga", "+91-98450-77108", "1995-04-08"),
+        ("donor1@curareach.org", "Rahul Verma", "O-", "Shivamogga", "Shivamogga", "+91-98450-77101", "1994-03-12", [DonationCategory.BLOOD, DonationCategory.KIDNEY]),
+        ("donor2@curareach.org", "Sneha Nair", "B+", "Bhadravathi", "Shivamogga", "+91-98450-77102", "1997-07-25", [DonationCategory.BLOOD, DonationCategory.LIVER]),
+        ("donor3@curareach.org", "Arjun Rao", "A+", "Shivamogga", "Shivamogga", "+91-98450-77103", "1991-11-05", [DonationCategory.HEART, DonationCategory.LUNGS, DonationCategory.CORNEA]),
+        ("donor4@curareach.org", "Meera Kulkarni", "AB+", "Kudligere", "Shivamogga", "+91-98450-77104", "1998-02-18", [DonationCategory.KIDNEY, DonationCategory.CORNEA]),
+        ("donor5@curareach.org", "Vikram Gowda", "O+", "Holalur", "Shivamogga", "+91-98450-77105", "1989-09-30", [DonationCategory.BLOOD, DonationCategory.LIVER, DonationCategory.PANCREAS]),
+        ("donor6@curareach.org", "Ananya Bhat", "A-", "Shivamogga", "Shivamogga", "+91-98450-77106", "1996-06-14", [DonationCategory.HEART, DonationCategory.CORNEA]),
+        ("donor7@curareach.org", "Mohammed Farhan", "B-", "Bhadravathi", "Shivamogga", "+91-98450-77107", "1993-12-22", [DonationCategory.KIDNEY, DonationCategory.BONE_MARROW]),
+        ("donor8@curareach.org", "Pooja Hegde", "O+", "Shivamogga", "Shivamogga", "+91-98450-77108", "1995-04-08", [DonationCategory.KIDNEY, DonationCategory.LIVER, DonationCategory.HEART, DonationCategory.CORNEA]),
     ]
 
     donor_profiles = []
-    for idx, (email, name, bg, city, dist, phone, dob) in enumerate(donors_data):
+    for idx, (email, name, bg, city, dist, phone, dob, cats) in enumerate(donors_data):
         u = db.query(User).filter(User.email == email).first()
         if not u:
             u = User(
@@ -1145,16 +1145,22 @@ def seed_lifelink_records(db: Session) -> None:
         db.add(d_prof)
         db.flush()
 
-        pref = DonationPreference(
-            id=f"pref-{idx+1}",
-            donor_id=d_prof.id,
-            donation_category=DonationCategory.BLOOD,
-            self_reported_blood_group=bg,
-            preferred_city=city,
-            preferred_district=dist,
-            willing_to_travel=True,
-            active=True
-        )
+        # Add all selected donation categories (Organs + Blood)
+        for c_idx, cat in enumerate(cats):
+            pref = DonationPreference(
+                id=f"pref-{idx+1}-{c_idx+1}",
+                donor_id=d_prof.id,
+                donation_category=cat,
+                self_reported_blood_group=bg,
+                living_organ_interest=f"Voluntary {cat.capitalize()} Donation Expression" if cat in [DonationCategory.KIDNEY, DonationCategory.LIVER] else None,
+                tissue_interest=f"Pledged {cat.capitalize()} Tissue" if cat in [DonationCategory.CORNEA, DonationCategory.BONE_MARROW] else None,
+                preferred_city=city,
+                preferred_district=dist,
+                willing_to_travel=True,
+                active=True
+            )
+            db.add(pref)
+
         avail = DonorAvailability(
             id=f"avail-{idx+1}",
             donor_id=d_prof.id,
@@ -1174,7 +1180,7 @@ def seed_lifelink_records(db: Session) -> None:
             consent_version="1.0",
             granted=True
         )
-        db.add_all([pref, avail, c_priv, c_notif])
+        db.add_all([avail, c_priv, c_notif])
         donor_profiles.append(d_prof)
 
     db.commit()
@@ -1201,7 +1207,7 @@ def seed_lifelink_records(db: Session) -> None:
         )
         db.add_all([hosp_sub, sub_inv])
 
-        # 4. SEED SAMPLE BLOOD DONOR REQUEST FOR O- NEGATIVE
+        # 4. SEED SAMPLE EMERGENCY DONOR REQUESTS (BLOOD + KIDNEY + LIVER + HEART)
         admin_u = db.query(User).filter(User.role == Role.HOSPITAL_STAFF).first() or db.query(User).first()
         req_1 = HospitalDonorRequest(
             id="req-donor-1001",
@@ -1219,7 +1225,59 @@ def seed_lifelink_records(db: Session) -> None:
             request_description="Critical acute requirement: 2 units of O- Negative blood for postpartum hemorrhage emergency.",
             expires_at=now + timedelta(hours=42)
         )
-        db.add(req_1)
+        
+        req_kidney = HospitalDonorRequest(
+            id="req-donor-1002",
+            hospital_id=hosp.id,
+            created_by=admin_u.id,
+            internal_case_reference="CR-REQ-2026-1002",
+            donation_category=DonationCategory.KIDNEY,
+            requested_blood_group="O-",
+            units_needed=1,
+            city="Shivamogga",
+            district="Shivamogga",
+            requested_from=now - timedelta(hours=4),
+            requested_until=now + timedelta(hours=72),
+            request_status=DonorRequestStatus.ACTIVE,
+            request_description="Urgent voluntary Kidney donor coordination for end-stage renal disease (ESRD) patient awaiting transplant compatibility.",
+            expires_at=now + timedelta(hours=72)
+        )
+
+        req_liver = HospitalDonorRequest(
+            id="req-donor-1003",
+            hospital_id=hosp.id,
+            created_by=admin_u.id,
+            internal_case_reference="CR-REQ-2026-1003",
+            donation_category=DonationCategory.LIVER,
+            requested_blood_group="B+",
+            units_needed=1,
+            city="Shivamogga",
+            district="Shivamogga",
+            requested_from=now - timedelta(hours=3),
+            requested_until=now + timedelta(hours=48),
+            request_status=DonorRequestStatus.ACTIVE,
+            request_description="Urgent Living Donor Liver Lobe evaluation inquiry for acute fulminant hepatic failure.",
+            expires_at=now + timedelta(hours=48)
+        )
+
+        req_heart = HospitalDonorRequest(
+            id="req-donor-1004",
+            hospital_id=hosp.id,
+            created_by=admin_u.id,
+            internal_case_reference="CR-REQ-2026-1004",
+            donation_category=DonationCategory.HEART,
+            requested_blood_group="A+",
+            units_needed=1,
+            city="Shivamogga",
+            district="Shivamogga",
+            requested_from=now - timedelta(hours=2),
+            requested_until=now + timedelta(hours=24),
+            request_status=DonorRequestStatus.ACTIVE,
+            request_description="NOTTO State Organ Tissue Transplant Network priority Heart match enquiry for cardiogenic shock recipient.",
+            expires_at=now + timedelta(hours=24)
+        )
+
+        db.add_all([req_1, req_kidney, req_liver, req_heart])
         db.flush()
 
         donor_o_neg = donor_profiles[0] if donor_profiles else db.query(DonorProfile).first()
