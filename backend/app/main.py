@@ -70,7 +70,7 @@ def health():
         "status": "healthy",
         "app": settings.APP_NAME,
         "version": settings.VERSION,
-        "database": "sqlite_connected",
+        "database": "postgresql_supabase_connected" if "postgres" in settings.DATABASE_URL else "sqlite_connected",
         "ai_orchestrator": "active",
         "demo_mode": settings.DEMO_MODE,
         "llm_provider": "gemini" if settings.GEMINI_API_KEY else "deterministic_fallback"

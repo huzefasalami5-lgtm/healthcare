@@ -1,6 +1,8 @@
 """SQLAlchemy models registry for CuraReach 360"""
 from app.core.database import Base
 from app.models.user import User, PatientProfile, CommunityWorkerProfile
+from app.models.patient import Patient
+from app.models.lab_results import LabResult
 from app.models.hospital import Hospital, HospitalDepartment, HospitalService, AppointmentSlot
 from app.models.case import ClinicalCase, CaseStatus, UrgencyLevel, ConsentRecord, SymptomSubmission, UploadedImage
 from app.models.clinical import TriageAssessment, ClinicianReview, ReviewAction

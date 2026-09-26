@@ -61,9 +61,13 @@ class Settings(BaseModel):
         return "sqlite:///./curareach360.db"
 
     DATABASE_URL: str = (
-        os.getenv("DATABASE_URL").replace("postgres://", "postgresql://", 1)
+        os.getenv("DATABASE_URL").replace("postgres://", "postgresql+psycopg2://", 1)
         if os.getenv("DATABASE_URL") and os.getenv("DATABASE_URL").startswith("postgres://")
-        else (os.getenv("DATABASE_URL") or ("/tmp/curareach360.db" if os.getenv("VERCEL") else "sqlite:///./curareach360.db"))
+        else (
+            os.getenv("DATABASE_URL").replace("postgresql://", "postgresql+psycopg2://", 1)
+            if os.getenv("DATABASE_URL") and os.getenv("DATABASE_URL").startswith("postgresql://")
+            else (os.getenv("DATABASE_URL") or ("/tmp/curareach360.db" if os.getenv("VERCEL") else "sqlite:///./curareach360.db"))
+        )
     )
     if DATABASE_URL and not DATABASE_URL.startswith("sqlite") and not DATABASE_URL.startswith("postgresql"):
         DATABASE_URL = f"sqlite:///{DATABASE_URL}"

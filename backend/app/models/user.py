@@ -23,6 +23,7 @@ class User(Base):
 
     # Profiles
     patient_profile = relationship("PatientProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    patient_record = relationship("Patient", back_populates="user", uselist=False, cascade="all, delete-orphan")
     worker_profile = relationship("CommunityWorkerProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
 class PatientProfile(Base):
@@ -52,8 +53,8 @@ class PatientProfile(Base):
     surgeries = relationship("PatientSurgery", back_populates="patient", cascade="all, delete-orphan")
     medications = relationship("PatientMedication", back_populates="patient", cascade="all, delete-orphan")
     family_history = relationship("FamilyMedicalHistory", back_populates="patient", cascade="all, delete-orphan")
-    medical_records = relationship("MedicalRecord", back_populates="patient", cascade="all, delete-orphan")
-    prescriptions = relationship("Prescription", back_populates="patient", cascade="all, delete-orphan")
+    medical_records = relationship("MedicalRecord", back_populates="patient", cascade="all, delete-orphan", primaryjoin="PatientProfile.id==MedicalRecord.patient_id", foreign_keys="[MedicalRecord.patient_id]")
+    prescriptions = relationship("Prescription", back_populates="patient", cascade="all, delete-orphan", primaryjoin="PatientProfile.id==Prescription.patient_id", foreign_keys="[Prescription.patient_id]")
     transactions = relationship("PatientTreatmentTransaction", back_populates="patient", cascade="all, delete-orphan")
 
 class CommunityWorkerProfile(Base):

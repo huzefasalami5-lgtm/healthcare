@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from app.core.database import Base, engine, SessionLocal
 from app.core.security import get_password_hash, Role
 from app.models.user import User, PatientProfile, CommunityWorkerProfile
+from app.models.patient import Patient
+from app.models.lab_results import LabResult
 from app.models.hospital import Hospital, HospitalDepartment, HospitalService, AppointmentSlot
 from app.models.case import ClinicalCase, CaseStatus, UrgencyLevel, ConsentRecord, SymptomSubmission, UploadedImage
 from app.models.clinical import TriageAssessment, ClinicianReview, ReviewAction
@@ -62,6 +64,7 @@ def seed_database(db: Session) -> None:
         seed_medical_and_financial_records(db)
         seed_lifelink_records(db)
         seed_deceased_enquiry_records(db)
+        seed_patient_database_records(db)
         return
 
     now = datetime.now(timezone.utc)
@@ -1219,6 +1222,7 @@ def seed_lifelink_records(db: Session) -> None:
         db.add(req_1)
         db.flush()
 
+        donor_o_neg = donor_profiles[0] if donor_profiles else db.query(DonorProfile).first()
         # Add consent first and flush
         c_contact = DonorConsent(
             id="consent-contact-donor-1",
@@ -1307,4 +1311,190 @@ def seed_deceased_enquiry_records(db: Session) -> None:
     db.add(e1)
     db.commit()
     print("[SUCCESS] CuraReach LifeLink seeded with initial deceased donation enquiry.")
+
+def seed_patient_database_records(db: Session) -> None:
+    """Ensure patients, appointments, medical records, prescriptions, and lab results are populated in database"""
+    now = datetime.now(timezone.utc)
+    
+    # 1. Seed Patients
+    ramesh_u = db.query(User).filter(User.email == "patient@curareach.org").first()
+    doctor_u = db.query(User).filter(User.email == "clinician@curareach.org").first()
+    
+    if ramesh_u:
+        p_ramesh = db.query(Patient).filter(Patient.user_id == ramesh_u.id).first()
+        ramesh_pid = ramesh_u.patient_profile.id if ramesh_u.patient_profile else "CR-PAT-2026-0101"
+        if not p_ramesh:
+            p_ramesh = Patient(
+                id=ramesh_pid,
+                user_id=ramesh_u.id,
+                full_name=ramesh_u.full_name,
+                date_of_birth="1982-08-14",
+                age=44,
+                gender="Male",
+                phone=ramesh_u.phone or "+91-98451-22334",
+                email=ramesh_u.email,
+                address="Holehanasawadi Village, Bhadravathi Taluk, Shivamogga, Karnataka 577201",
+                emergency_contact_name="Sunita Patel",
+                emergency_contact_phone="+91-98451-99887",
+                blood_group="O+",
+                allergies="Penicillin (Severe anaphylaxis), Shellfish (Mild hives)",
+                medical_conditions="Type 2 Diabetes Mellitus, Essential Hypertension, COPD (Chronic Obstructive Pulmonary Disease)",
+                current_medications="Metformin 500mg (twice daily), Amlodipine 5mg (daily), Salbutamol Inhaler (as needed)",
+                medical_history="Diagnosed with Type 2 Diabetes in 2018. Smoker for 15 years (quit 2021). Regular monitoring at PHC Kudligere.",
+                previous_surgeries="Appendectomy (2012, Shivamogga Civil Hospital), Right knee arthroscopy (2019)",
+                family_medical_history="Father: Coronary Artery Disease (CAD). Mother: Hypertension, Type 2 Diabetes."
+            )
+            db.add(p_ramesh)
+            db.commit()
+
+        # Seed sample appointments for Ramesh
+        if not db.query(Appointment).filter(Appointment.id == "apt-demo-01").first():
+            db.add(Appointment(
+                id="apt-demo-01",
+                patient_id=p_ramesh.id,
+                doctor_id=doctor_u.id if doctor_u else None,
+                appointment_date=(now + timedelta(days=2)).strftime("%Y-%m-%d"),
+                appointment_time="10:30 AM",
+                reason="Routine Diabetic Foot & Blood Sugar Review",
+                status="scheduled",
+                notes="Fast for 8 hours prior to fasting blood glucose test. Bring current medication chart.",
+                scheduled_at=(now + timedelta(days=2)).strftime("%Y-%m-%d 10:30 AM"),
+                department_name="General Medicine",
+                doctor_name="Dr. Ananya Sen (District Care Lead)"
+            ))
+        if not db.query(Appointment).filter(Appointment.id == "apt-demo-02").first():
+            db.add(Appointment(
+                id="apt-demo-02",
+                patient_id=p_ramesh.id,
+                doctor_id=doctor_u.id if doctor_u else None,
+                appointment_date=(now - timedelta(days=14)).strftime("%Y-%m-%d"),
+                appointment_time="02:00 PM",
+                reason="Cardiorespiratory Follow-up & SpO2 Check",
+                status="completed",
+                notes="Consultation completed. SpO2 maintained at 97% on room air. Continued bronchodilator therapy.",
+                scheduled_at=(now - timedelta(days=14)).strftime("%Y-%m-%d 02:00 PM"),
+                department_name="Pulmonology",
+                doctor_name="Dr. Rajesh Rao"
+            ))
+        db.commit()
+
+        # Seed sample medical records for Ramesh
+        if not db.query(MedicalRecord).filter(MedicalRecord.id == "mr-demo-01").first():
+            db.add(MedicalRecord(
+                id="mr-demo-01",
+                patient_id=p_ramesh.id,
+                doctor_id=doctor_u.id if doctor_u else None,
+                visit_date=(now - timedelta(days=14)).strftime("%Y-%m-%d"),
+                symptoms="Intermittent breathlessness on exertion, mild bilateral ankle swelling, dry cough for 3 days.",
+                diagnosis="Acute exacerbation of chronic bronchitis, early Grade 1 pedal edema secondary to hypertension.",
+                treatment="Nebulization with Budecort + Duolin, oral Azithromycin 500mg course, tight sodium restriction.",
+                doctor_notes="Patient shows good compliance with oral hypoglycemics. Advised to avoid cold dusty environments.",
+                follow_up_date=(now + timedelta(days=7)).strftime("%Y-%m-%d"),
+                title="Pulmonology & Hypertension Consultation Note",
+                record_type="VISIT_NOTE",
+                facility_name="Shivamogga District Civil Hospital"
+            ))
+            db.commit()
+
+        # Seed sample prescriptions for Ramesh
+        if not db.query(Prescription).filter(Prescription.id == "rx-demo-01").first():
+            db.add(Prescription(
+                id="rx-demo-01",
+                prescription_code="RX-2026-0042",
+                patient_id=p_ramesh.id,
+                doctor_id=doctor_u.id if doctor_u else None,
+                clinician_id=doctor_u.id if doctor_u else None,
+                medicine_name="Azithromycin 500mg",
+                dosage="500 mg",
+                frequency="Once daily after lunch",
+                duration="5 days",
+                instructions="Take with a full glass of water. Complete full 5-day course.",
+                prescription_date=(now - timedelta(days=14)).strftime("%Y-%m-%d"),
+                diagnosis="Acute bronchitis with respiratory symptoms",
+                status="ACTIVE"
+            ))
+        if not db.query(Prescription).filter(Prescription.id == "rx-demo-02").first():
+            db.add(Prescription(
+                id="rx-demo-02",
+                prescription_code="RX-2026-0043",
+                patient_id=p_ramesh.id,
+                doctor_id=doctor_u.id if doctor_u else None,
+                clinician_id=doctor_u.id if doctor_u else None,
+                medicine_name="Metformin Hydrochloride 500mg",
+                dosage="500 mg",
+                frequency="Twice daily with meals",
+                duration="30 days",
+                instructions="Maintain regular diet and monitoring. Do not skip doses.",
+                prescription_date=(now - timedelta(days=14)).strftime("%Y-%m-%d"),
+                diagnosis="Type 2 Diabetes Mellitus Maintenance",
+                status="ACTIVE"
+            ))
+        db.commit()
+
+        # Seed sample lab results for Ramesh
+        if not db.query(LabResult).filter(LabResult.id == "lab-demo-01").first():
+            db.add(LabResult(
+                id="lab-demo-01",
+                patient_id=p_ramesh.id,
+                doctor_id=doctor_u.id if doctor_u else None,
+                test_name="HbA1c Glycated Hemoglobin",
+                test_date=(now - timedelta(days=5)).strftime("%Y-%m-%d"),
+                result="6.8%",
+                normal_range="< 5.7% (Good Control: < 7.0%)",
+                doctor_notes="Glycemic control is satisfactory on current Metformin regimen. Re-test in 3 months."
+            ))
+        if not db.query(LabResult).filter(LabResult.id == "lab-demo-02").first():
+            db.add(LabResult(
+                id="lab-demo-02",
+                patient_id=p_ramesh.id,
+                doctor_id=doctor_u.id if doctor_u else None,
+                test_name="Complete Blood Count (CBC)",
+                test_date=(now - timedelta(days=5)).strftime("%Y-%m-%d"),
+                result="Hemoglobin 14.2 g/dL, WBC 7,800/mcL, Platelets 240,000/mcL",
+                normal_range="Hb: 13.0-17.0 g/dL, WBC: 4,000-11,000/mcL",
+                doctor_notes="Normal hematology parameters. No signs of acute systemic infection or anemia."
+            ))
+        if not db.query(LabResult).filter(LabResult.id == "lab-demo-03").first():
+            db.add(LabResult(
+                id="lab-demo-03",
+                patient_id=p_ramesh.id,
+                doctor_id=doctor_u.id if doctor_u else None,
+                test_name="Serum Creatinine & eGFR",
+                test_date=(now - timedelta(days=5)).strftime("%Y-%m-%d"),
+                result="Creatinine: 0.95 mg/dL, eGFR: 88 mL/min/1.73m²",
+                normal_range="Creatinine: 0.7 - 1.3 mg/dL, eGFR > 60",
+                doctor_notes="Normal renal function. Safe to continue current antihypertensive and oral hypoglycemic regimen."
+            ))
+        db.commit()
+
+    # Also seed Lakshmi Devi if present
+    lakshmi_u = db.query(User).filter(User.email == "lakshmi.devi@example.com").first()
+    if lakshmi_u:
+        p_lakshmi = db.query(Patient).filter(Patient.user_id == lakshmi_u.id).first()
+        lakshmi_pid = lakshmi_u.patient_profile.id if lakshmi_u.patient_profile else "CR-PAT-2026-0102"
+        if not p_lakshmi:
+            p_lakshmi = Patient(
+                id=lakshmi_pid,
+                user_id=lakshmi_u.id,
+                full_name=lakshmi_u.full_name,
+                date_of_birth="1978-03-22",
+                age=48,
+                gender="Female",
+                phone=lakshmi_u.phone or "+91-98452-66778",
+                email=lakshmi_u.email,
+                address="Kudligere Village, Bhadravathi, Shivamogga 577201",
+                emergency_contact_name="Ravi Kumar",
+                emergency_contact_phone="+91-98452-99001",
+                blood_group="B+",
+                allergies="Sulfa drugs",
+                medical_conditions="Mild Asthma, Osteoarthritis right knee",
+                current_medications="Salbutamol Inhaler PRN, Paracetamol 650mg SOS",
+                medical_history="Knee pain for 2 years, managed conservatively.",
+                previous_surgeries="None",
+                family_medical_history="Mother had Rheumatoid Arthritis"
+            )
+            db.add(p_lakshmi)
+            db.commit()
+
+    print("[SUCCESS] Patient database seeded with patients, medical records, appointments, prescriptions, and lab results.")
 

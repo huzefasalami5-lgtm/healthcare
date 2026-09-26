@@ -1,5 +1,54 @@
+"""Patient Database Model and Pydantic Schemas"""
+import uuid
 from typing import List, Optional
+from datetime import datetime, timezone
 from pydantic import BaseModel, Field
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Text
+from sqlalchemy.orm import relationship
+from app.core.database import Base
+
+def generate_uuid():
+    return str(uuid.uuid4())
+
+class Patient(Base):
+    __tablename__ = "patients"
+    
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, unique=True, index=True)
+    
+    full_name = Column(String(255), nullable=False)
+    date_of_birth = Column(String(50), nullable=True)
+    age = Column(Integer, nullable=True)
+    gender = Column(String(20), nullable=True)
+    phone = Column(String(50), nullable=True)
+    email = Column(String(255), nullable=True, index=True)
+    address = Column(Text, nullable=True)
+    
+    emergency_contact_name = Column(String(100), nullable=True)
+    emergency_contact_phone = Column(String(50), nullable=True)
+    blood_group = Column(String(10), default="O+")
+    
+    allergies = Column(Text, nullable=True)
+    medical_conditions = Column(Text, nullable=True)
+    current_medications = Column(Text, nullable=True)
+    medical_history = Column(Text, nullable=True)
+    previous_surgeries = Column(Text, nullable=True)
+    family_medical_history = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    user = relationship("User", back_populates="patient_record")
+    medical_records = relationship("MedicalRecord", back_populates="patient_rel", cascade="all, delete-orphan", primaryjoin="Patient.id==MedicalRecord.patient_id", foreign_keys="[MedicalRecord.patient_id]", overlaps="patient,medical_records")
+    appointments = relationship("Appointment", back_populates="patient_rel", cascade="all, delete-orphan", primaryjoin="Patient.id==Appointment.patient_id", foreign_keys="[Appointment.patient_id]", overlaps="appointment")
+    prescriptions = relationship("Prescription", back_populates="patient_rel", cascade="all, delete-orphan", primaryjoin="Patient.id==Prescription.patient_id", foreign_keys="[Prescription.patient_id]", overlaps="patient,prescriptions")
+    lab_results = relationship("LabResult", back_populates="patient_rel", cascade="all, delete-orphan", primaryjoin="Patient.id==LabResult.patient_id", foreign_keys="[LabResult.patient_id]")
+
+
+# ====================================================================
+# Backward Compatibility Pydantic Schemas for AI Agents & Intake
+# ====================================================================
 
 class Vitals(BaseModel):
     heart_rate: int = Field(..., description="Beats per minute (BPM)")

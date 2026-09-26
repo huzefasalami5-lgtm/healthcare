@@ -68,14 +68,24 @@ class Appointment(Base):
     __tablename__ = "appointments"
     
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    referral_id = Column(String(36), ForeignKey("referrals.id", ondelete="CASCADE"), unique=True, nullable=False)
-    case_id = Column(String(36), ForeignKey("clinical_cases.id", ondelete="CASCADE"), nullable=False, index=True)
-    hospital_id = Column(String(36), ForeignKey("hospitals.id", ondelete="CASCADE"), nullable=False)
+    patient_id = Column(String(36), nullable=True, index=True)
+    doctor_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     
-    scheduled_at = Column(String(100), nullable=False)  # e.g., "2026-09-28 10:30 AM"
+    # Standard Appointment Fields
+    appointment_date = Column(String(50), nullable=True)
+    appointment_time = Column(String(50), nullable=True)
+    reason = Column(Text, nullable=True)
+    status = Column(String(50), default="scheduled", index=True)  # scheduled, confirmed, completed, cancelled
+    notes = Column(Text, nullable=True)
+    
+    # Referral Hospital Specific Fields (Optional / Backward-compatible)
+    referral_id = Column(String(36), ForeignKey("referrals.id", ondelete="CASCADE"), unique=True, nullable=True)
+    case_id = Column(String(36), ForeignKey("clinical_cases.id", ondelete="CASCADE"), nullable=True, index=True)
+    hospital_id = Column(String(36), ForeignKey("hospitals.id", ondelete="CASCADE"), nullable=True)
+    
+    scheduled_at = Column(String(100), nullable=True)  # e.g., "2026-09-28 10:30 AM"
     department_name = Column(String(100), default="General Medicine")
     doctor_name = Column(String(150), default="Specialist In-Charge")
-    status = Column(String(50), default=AppointmentStatus.CONFIRMED, index=True)
     
     # Section 11: Patient Arrival & Consultation Updates
     arrival_status = Column(String(50), default="PENDING")  # PENDING, ARRIVED, NOT_ARRIVED
@@ -83,7 +93,10 @@ class Appointment(Base):
     discharge_instructions = Column(Text, nullable=True)
     attendance_logged_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
+    patient_rel = relationship("Patient", back_populates="appointments", foreign_keys=[patient_id], primaryjoin="Appointment.patient_id==Patient.id")
+    doctor = relationship("User", foreign_keys=[doctor_id])
     referral = relationship("Referral", back_populates="appointment")
     case = relationship("ClinicalCase")
     hospital = relationship("Hospital")
